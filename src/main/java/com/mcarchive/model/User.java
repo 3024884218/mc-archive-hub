@@ -66,6 +66,10 @@ public class User {
     @Column(length = 500)
     private String alipayQrCode;
 
+    /** 联系邮箱（公开显示在存档详情页） */
+    @Column(length = 120)
+    private String contactEmail;
+
     /** 连续登录失败次数 */
     @Column(nullable = false)
     private int failedLoginAttempts = 0;
@@ -122,4 +126,7 @@ public class User {
 
     public String getAlipayQrCode() { return alipayQrCode; }
     public void setAlipayQrCode(String alipayQrCode) { this.alipayQrCode = alipayQrCode; }
+
+    public String getContactEmail() { return contactEmail; }
+    public void setContactEmail(String contactEmail) { this.contactEmail = contactEmail; }
 }

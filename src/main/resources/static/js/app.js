@@ -503,6 +503,59 @@ MC.handleBookmark = async function(id, evt) {
   }
 };
 
+MC.handleDislike = async function(id, evt) {
+  if (evt) evt.stopPropagation();
+  if (!MC.State.currentUser) return MC.openAuthModal('login');
+
+  try {
+    const r = await MC.API.toggleDislike(id);
+    if (r.deleted) {
+      MC.Toast.show(r.message, 'info');
+      MC.navigate('home');
+      return;
+    }
+    const btn = document.getElementById('detail-dislike-btn');
+    if (btn) {
+      btn.classList.toggle('disliked', r.disliked);
+      btn.innerHTML = '<svg><use href="#icon-thumbs-down"/></svg> 踩 ' + (r.dislikeCount || 0);
+    }
+    MC.Toast.show(r.disliked ? '已踩 👎' : '已取消踩', 'info');
+  } catch (e) {
+    MC.Toast.show(e.message, 'error');
+  }
+};
+
+MC.handleAddComment = async function(archiveId) {
+  var input = document.getElementById('comment-input');
+  var btn = document.getElementById('comment-submit');
+  if (!input) return;
+  var content = input.value.trim();
+  if (!content) return;
+  btn.disabled = true;
+  try {
+    await MC.API.addComment(archiveId, content);
+    input.value = '';
+    MC.Toast.show('评论已发表', 'success');
+    // 刷新详情页评论
+    MC.navigate('detail', archiveId);
+  } catch (e) {
+    MC.Toast.show(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+MC.handleDeleteComment = async function(commentId) {
+  if (!confirm('确定删除这条评论吗？')) return;
+  try {
+    await MC.API.deleteComment(commentId);
+    MC.Toast.show('评论已删除', 'info');
+    MC.navigate('detail', MC.State.archiveDetail.id);
+  } catch (e) {
+    MC.Toast.show(e.message, 'error');
+  }
+};
+
 MC.handleDownload = function(id) {
   window.open('/api/archives/' + id + '/download', '_blank');
   MC.Toast.show('下载开始！', 'success');
@@ -858,6 +911,19 @@ MC.renderProfile = async function() {
       </div>
     </div>
 
+    <!-- 联系邮箱设置 -->
+    <div style="background:var(--c-surface);border:1px solid var(--c-border-light);border-radius:var(--r-lg);padding:var(--sp-6);margin-bottom:var(--sp-8)">
+      <h3 style="font-size:var(--fs-lg);font-weight:var(--fw-semibold);margin-bottom:var(--sp-4)">联系邮箱</h3>
+      <p style="font-size:var(--fs-xs);color:var(--c-text-tertiary);margin-bottom:var(--sp-3)">此邮箱将公开显示在你的存档详情页，供其他用户联系你</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="form-input" id="profile-contact-email" type="email"
+          value="${MC.UI.esc(u.contactEmail || '')}" placeholder="your@email.com"
+          style="flex:1;max-width:320px">
+        <button class="btn btn-primary btn-sm" onclick="MC.handleUpdateContactEmail()">保存</button>
+        ${u.contactEmail ? '<button class="btn btn-ghost btn-sm" onclick="MC.handleUpdateContactEmail(true)" style="color:var(--c-error)">清除</button>' : ''}
+      </div>
+    </div>
+
     <!-- 我的存档 -->
     <div class="home-topbar">
       <h2 class="section-title">我的存档</h2>
@@ -1106,6 +1172,18 @@ MC.handleQrUpload = async function(type, e) {
     MC.renderProfile();
   } catch (err) {
     MC.Toast.show('上传失败: ' + err.message, 'error');
+  }
+};
+
+MC.handleUpdateContactEmail = async function(clear) {
+  var email = clear ? '' : document.getElementById('profile-contact-email').value.trim();
+  try {
+    await MC.API.updateContactEmail(email);
+    MC.State.currentUser = await MC.API.checkAuth();
+    MC.Toast.show(clear ? '联系邮箱已清除' : '联系邮箱已更新', 'success');
+    MC.renderProfile();
+  } catch (err) {
+    MC.Toast.show(err.message, 'error');
   }
 };
 

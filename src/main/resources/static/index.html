@@ -73,6 +73,14 @@
     <symbol id="icon-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
       <circle cx="12" cy="12" r="10"/><path d="M12 6v12M9.5 9.5C9.5 8.12 10.62 7 12 7s2.5 1.12 2.5 2.5S13.38 12 12 12s-2.5 1.12-2.5 2.5 1.12 2.5 2.5 2.5"/>
     </symbol>
+    <!-- Mail -->
+    <symbol id="icon-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+    </symbol>
+    <!-- Thumbs Down -->
+    <symbol id="icon-thumbs-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M10 15v4a2 2 0 002 2l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10zm4 0h5.5a2 2 0 002-2.5l-2.5-7A2 2 0 0017.28 4H14"/>
+    </symbol>
   </defs>
 </svg>
 </head>
@@ -145,6 +153,10 @@
       &copy; 2024 MC Archive Hub &mdash; Minecraft 存档分享社区
     </div>
     <div class="footer-links">
+      <a class="footer-link" href="#" onclick="MC.openSponsorModal()">⚡ 支持网站</a>
+      <a class="footer-link" href="mailto:douking8@outlook.com">
+        <svg width="14" height="14"><use href="#icon-mail"/></svg> 联系网站: douking8@outlook.com
+      </a>
       <a class="footer-link" href="#" onclick="MC.navigate('home')">发现存档</a>
       <a class="footer-link" href="#" onclick="MC.openUploadModal()">上传存档</a>
     </div>

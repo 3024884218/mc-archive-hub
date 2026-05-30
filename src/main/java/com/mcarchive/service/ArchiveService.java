@@ -3,6 +3,7 @@ package com.mcarchive.service;
 import com.mcarchive.dto.CreateArchiveRequest;
 import com.mcarchive.model.Archive;
 import com.mcarchive.model.ArchiveImage;
+import com.mcarchive.model.Comment;
 import com.mcarchive.model.User;
 import com.mcarchive.repository.*;
 import org.springframework.data.domain.Page;
@@ -28,15 +29,21 @@ public class ArchiveService {
     private final ArchiveRepository archiveRepository;
     private final LikeRepository likeRepository;
     private final BookmarkRepository bookmarkRepository;
+    private final DislikeRepository dislikeRepository;
+    private final CommentRepository commentRepository;
     private final FileStorageService fileStorageService;
 
     public ArchiveService(ArchiveRepository archiveRepository,
                           LikeRepository likeRepository,
                           BookmarkRepository bookmarkRepository,
+                          DislikeRepository dislikeRepository,
+                          CommentRepository commentRepository,
                           FileStorageService fileStorageService) {
         this.archiveRepository = archiveRepository;
         this.likeRepository = likeRepository;
         this.bookmarkRepository = bookmarkRepository;
+        this.dislikeRepository = dislikeRepository;
+        this.commentRepository = commentRepository;
         this.fileStorageService = fileStorageService;
     }
 
@@ -331,5 +338,94 @@ public class ArchiveService {
     public List<Archive> getRelatedArchives(String category, Long excludeId, int limit) {
         return archiveRepository.findByCategoryAndIdNot(category, excludeId,
             PageRequest.of(0, limit)).getContent();
+    }
+
+    // ===== 踩功能 =====
+
+    /** 自动删除阈值：踩 >= 10 且 踩数 > 点赞数 × 2 */
+    private static final int AUTO_DELETE_DISLIKE_MIN = 10;
+    private static final double AUTO_DELETE_RATIO = 2.0;
+
+    @Transactional
+    public boolean toggleDislike(User user, Long archiveId) {
+        Archive archive = archiveRepository.findById(archiveId).orElse(null);
+        if (archive == null) return false;
+
+        // 不能踩自己的存档
+        if (archive.getAuthor().getId().equals(user.getId())) return false;
+
+        if (dislikeRepository.existsByUserIdAndArchiveId(user.getId(), archiveId)) {
+            dislikeRepository.deleteByUserIdAndArchiveId(user.getId(), archiveId);
+            archiveRepository.decrementDislikeCount(archiveId);
+            return false;
+        } else {
+            try {
+                DislikeRecord record = new DislikeRecord(user.getId(), archiveId);
+                dislikeRepository.saveAndFlush(record);
+                archiveRepository.incrementDislikeCount(archiveId);
+
+                // 刷新缓存数据，检查是否需要自动删除
+                archiveRepository.flush();
+                archive = archiveRepository.findById(archiveId).orElse(null);
+                if (archive != null && shouldAutoDelete(archive)) {
+                    deleteArchiveAutomatically(archive);
+                    return true; // 踩成功且触发了自动删除
+                }
+                return true;
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                return true; // 已踩过
+            }
+        }
+    }
+
+    private boolean shouldAutoDelete(Archive archive) {
+        int dislikes = archive.getDislikeCount();
+        int likes = archive.getLikeCount();
+        return dislikes >= AUTO_DELETE_DISLIKE_MIN && dislikes > likes * AUTO_DELETE_RATIO;
+    }
+
+    private void deleteArchiveAutomatically(Archive archive) {
+        commentRepository.deleteByArchiveId(archive.getId());
+        fileStorageService.deleteArchiveFiles(archive.getId());
+        archiveRepository.delete(archive);
+    }
+
+    public boolean isDisliked(User user, Long archiveId) {
+        return dislikeRepository.existsByUserIdAndArchiveId(user.getId(), archiveId);
+    }
+
+    // ===== 评论功能 =====
+
+    /** 对存档发表评论 */
+    @Transactional
+    public Comment addComment(User user, Long archiveId, String content) {
+        Archive archive = archiveRepository.findById(archiveId).orElse(null);
+        if (archive == null) throw new IllegalArgumentException("存档不存在");
+        if (content == null || content.trim().isEmpty())
+            throw new IllegalArgumentException("评论不能为空");
+        if (content.trim().length() > 2000)
+            throw new IllegalArgumentException("评论最多2000字");
+
+        Comment comment = new Comment();
+        comment.setAuthor(user);
+        comment.setArchive(archive);
+        comment.setContent(content.trim());
+        comment.setCreatedAt(LocalDateTime.now());
+        return commentRepository.save(comment);
+    }
+
+    /** 获取存档的所有评论 */
+    public List<Comment> getComments(Long archiveId) {
+        return commentRepository.findByArchiveIdOrderByCreatedAtDesc(archiveId);
+    }
+
+    /** 删除评论（仅作者可删） */
+    @Transactional
+    public boolean deleteComment(User user, Long commentId) {
+        Comment comment = commentRepository.findById(commentId).orElse(null);
+        if (comment == null) return false;
+        if (!comment.getAuthor().getId().equals(user.getId())) return false;
+        commentRepository.delete(comment);
+        return true;
     }
 }

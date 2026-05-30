@@ -235,36 +235,69 @@ MC.renderDetail = async function(id) {
       );
     }
 
-    // Markdown 渲染描述
-    var desc = document.querySelector('.detail-desc');
-    if (desc && a.description) {
-      var md = MC.md(a.description);
-      if (md !== MC.UI.esc(a.description || '')) {
-        desc.innerHTML = '<div class="md-content">' + md + '</div>';
-      }
+    // 踩按钮
+    var actions3 = document.querySelector('.detail-actions');
+    if (actions3) {
+      var disliked = a.disliked || false;
+      actions3.insertAdjacentHTML('beforeend',
+        '<button class="detail-dislike-btn ' + (disliked ? 'disliked' : '') + '" id="detail-dislike-btn" onclick="MC.handleDislike(' + a.id + ',event)">' +
+        '<svg><use href="#icon-thumbs-down"/></svg> 踩 ' + (a.dislikeCount || 0) + '</button>'
+      );
     }
 
-    // 加载相关存档
-    MC.API._fetch('/api/archives/' + a.id + '/related').then(function(related) {
-      if (!related || !related.length) return;
-      var info = document.querySelector('.detail-info');
-      if (!info) return;
-      var sec = document.createElement('div');
-      sec.className = 'detail-desc-section';
-      sec.innerHTML = '<h3 style="font-size:var(--fs-xl);font-weight:var(--fw-semibold);margin-bottom:var(--sp-3)">相关存档</h3>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--sp-3))">' +
-        related.map(function(r, i) { return MC.UI.archiveCard(r, i); }).join('') +
-        '</div>';
-      info.appendChild(sec);
-    }).catch(function(){});
+    // 作者联系邮箱
+    if (a.contactEmail) {
+      var authorRow = document.querySelector('.detail-author-row');
+      if (authorRow) {
+        authorRow.insertAdjacentHTML('afterend',
+          '<div style="margin-bottom:12px"><a class="contact-email-link" href="mailto:' + a.contactEmail + '">' +
+          '<svg width="14" height="14"><use href="#icon-mail"/></svg> 联系作者: ' + MC.UI.esc(a.contactEmail) + '</a></div>'
+        );
+      }
+    }
 
     // 浏览量显示
     if (a.viewCount !== undefined) {
       var date = document.querySelector('.detail-date');
       if (date) {
-        date.textContent += ' · 👁 ' + a.viewCount + ' 次浏览 · ⬇ ' + (a.downloadCount || 0) + ' 次下载';
+        date.textContent += ' · 👁 ' + a.viewCount + ' 次浏览 · ⬇ ' + (a.downloadCount || 0) + ' 次下载' + 
+          ' · 👎 ' + (a.dislikeCount || 0);
       }
     }
+
+    // 评论加载
+    MC.API.getComments(a.id).then(function(comments) {
+      var info = document.querySelector('.detail-info');
+      if (!info) return;
+      var sec = document.createElement('div');
+      sec.className = 'comments-section';
+      sec.id = 'comments-section';
+      sec.innerHTML = '<h3 class="comments-title">💬 评论 (' + comments.length + ')</h3>' +
+        (comments.length === 0
+          ? '<p style="font-size:var(--fs-sm);color:var(--c-text-tertiary);text-align:center;padding:var(--sp-4)">暂无评论，来发表第一条吧</p>'
+          : comments.map(function(c) {
+              return '<div class="comment-item">' +
+                '<div class="comment-avatar" style="' + (c.authorAvatar ? 'background-image:url(' + c.authorAvatar + ');background-size:cover' : '') + '">' +
+                  (c.authorAvatar ? '' : MC.UI.esc((c.authorName || '?')[0])) +
+                '</div>' +
+                '<div class="comment-body">' +
+                  '<div><span class="comment-author">' + MC.UI.esc(c.authorName || '匿名') + '</span>' +
+                  '<span class="comment-time">' + MC.UI.fmtDate(c.createdAt) + '</span></div>' +
+                  '<div class="comment-content">' + MC.UI.esc(c.content) + '</div>' +
+                '</div>' +
+                (MC.State.currentUser && MC.State.currentUser.id === c.authorId
+                  ? '<button class="comment-delete" onclick="MC.handleDeleteComment(' + c.id + ')">删除</button>' : '') +
+              '</div>';
+            }).join('')
+        ) +
+        (MC.State.currentUser
+          ? '<div class="comment-form">' +
+            '<input class="comment-input" id="comment-input" type="text" placeholder="发表评论..." maxlength="2000" onkeydown="if(event.key===\'Enter\')MC.handleAddComment(' + a.id + ')">' +
+            '<button class="comment-submit" id="comment-submit" onclick="MC.handleAddComment(' + a.id + ')">发送</button>' +
+            '</div>'
+          : '<p style="font-size:var(--fs-sm);color:var(--c-text-tertiary);text-align:center;margin-top:var(--sp-3)"><a href="#" onclick="MC.openAuthModal(\'login\')" style="color:var(--c-primary)">登录</a>后即可评论</p>');
+      info.appendChild(sec);
+    }).catch(function(){});
   }, 200);
 };
 

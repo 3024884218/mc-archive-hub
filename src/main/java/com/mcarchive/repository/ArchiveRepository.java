@@ -81,6 +81,16 @@ public interface ArchiveRepository extends JpaRepository<Archive, Long> {
     @Query("UPDATE Archive a SET a.viewCount = a.viewCount + 1 WHERE a.id = :id")
     int incrementViewCount(@Param("id") Long id);
 
+    /** 原子递增踩数 */
+    @Modifying
+    @Query("UPDATE Archive a SET a.dislikeCount = a.dislikeCount + 1 WHERE a.id = :id")
+    int incrementDislikeCount(@Param("id") Long id);
+
+    /** 原子递减踩数（保证非负） */
+    @Modifying
+    @Query("UPDATE Archive a SET a.dislikeCount = a.dislikeCount - 1 WHERE a.id = :id AND a.dislikeCount > 0")
+    int decrementDislikeCount(@Param("id") Long id);
+
     // ===== 分页查询 =====
 
     @Query("SELECT a FROM Archive a WHERE "

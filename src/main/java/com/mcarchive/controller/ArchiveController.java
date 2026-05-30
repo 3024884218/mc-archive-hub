@@ -3,6 +3,7 @@ package com.mcarchive.controller;
 import com.mcarchive.dto.CreateArchiveRequest;
 import com.mcarchive.model.Archive;
 import com.mcarchive.model.ArchiveImage;
+import com.mcarchive.model.Comment;
 import com.mcarchive.model.User;
 import com.mcarchive.security.CurrentUser;
 import com.mcarchive.security.CustomUserDetails;
@@ -111,8 +112,9 @@ public class ArchiveController {
         CustomUserDetails details = currentUser.getDetails();
         boolean liked = details != null && archiveService.isLiked(details.getUser(), id);
         boolean bmed  = details != null && archiveService.isBookmarked(details.getUser(), id);
+        boolean disliked = details != null && archiveService.isDisliked(details.getUser(), id);
 
-        return ResponseEntity.ok(archiveToMap(archive, liked, bmed));
+        return ResponseEntity.ok(archiveToMap(archive, liked, bmed, disliked));
     }
 
     /** 相关存档（同分类，排除自身，最多4个） */
@@ -210,6 +212,50 @@ public class ArchiveController {
             .toList());
     }
 
+    /** 切换踩 */
+    @PostMapping("/{id}/dislike")
+    public ResponseEntity<?> toggleDislike(@PathVariable Long id) {
+        User user = requireAuth();
+        boolean disliked = archiveService.toggleDislike(user, id);
+        Archive a = archiveService.getArchiveById(id);
+
+        if (a == null) {
+            return ResponseEntity.ok(Map.of("disliked", disliked, "deleted", true,
+                "message", "该存档因踩数过多已被自动删除"));
+        }
+        return ResponseEntity.ok(Map.of("disliked", disliked, "dislikeCount", a.getDislikeCount()));
+    }
+
+    /** 获取存档评论 */
+    @GetMapping("/{id}/comments")
+    public ResponseEntity<?> getComments(@PathVariable Long id) {
+        List<Comment> comments = archiveService.getComments(id);
+        return ResponseEntity.ok(comments.stream().map(this::commentToMap).toList());
+    }
+
+    /** 发表评论 */
+    @PostMapping("/{id}/comments")
+    public ResponseEntity<?> addComment(@PathVariable Long id,
+                                         @RequestBody Map<String, String> body) {
+        User user = requireAuth();
+        String content = body.get("content");
+        try {
+            Comment comment = archiveService.addComment(user, id, content);
+            return ResponseEntity.ok(commentToMap(comment));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** 删除评论 */
+    @DeleteMapping("/comments/{commentId}")
+    public ResponseEntity<?> deleteComment(@PathVariable Long commentId) {
+        User user = requireAuth();
+        boolean ok = archiveService.deleteComment(user, commentId);
+        if (ok) return ResponseEntity.ok(Map.of("message", "评论已删除"));
+        return ResponseEntity.badRequest().body(Map.of("error", "无权删除此评论"));
+    }
+
     // ===== 辅助 =====
 
     private User requireAuth() {
@@ -217,10 +263,14 @@ public class ArchiveController {
     }
 
     private Map<String, Object> archiveToMap(Archive a) {
-        return archiveToMap(a, false, false);
+        return archiveToMap(a, false, false, false);
     }
 
     private Map<String, Object> archiveToMap(Archive a, boolean liked, boolean bookmarked) {
+        return archiveToMap(a, liked, bookmarked, false);
+    }
+
+    private Map<String, Object> archiveToMap(Archive a, boolean liked, boolean bookmarked, boolean disliked) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", a.getId());
         map.put("title", a.getTitle());
@@ -230,9 +280,11 @@ public class ArchiveController {
         map.put("description", a.getDescription());
         map.put("likeCount", a.getLikeCount());
         map.put("downloadCount", a.getDownloadCount());
+        map.put("dislikeCount", a.getDislikeCount());
         map.put("viewCount", a.getViewCount());
         map.put("liked", liked);
         map.put("bookmarked", bookmarked);
+        map.put("disliked", disliked);
         map.put("createdAt", a.getCreatedAt().toString());
         if (a.getAuthor() != null) {
             map.put("authorName", a.getAuthor().getNickname());
@@ -241,6 +293,7 @@ public class ArchiveController {
                 ? "/uploads/" + a.getAuthor().getWechatQrCode() : null);
             map.put("alipayQrCodeUrl", a.getAuthor().getAlipayQrCode() != null
                 ? "/uploads/" + a.getAuthor().getAlipayQrCode() : null);
+            map.put("contactEmail", a.getAuthor().getContactEmail());
         }
         List<Map<String, Object>> imgs = new ArrayList<>();
         for (ArchiveImage img : a.getImages()) {
@@ -249,5 +302,19 @@ public class ArchiveController {
         map.put("images", imgs);
         map.put("hasFile", a.getFilePath() != null && !a.getFilePath().isEmpty());
         return map;
+    }
+
+    private Map<String, Object> commentToMap(Comment c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", c.getId());
+        m.put("content", c.getContent());
+        m.put("createdAt", c.getCreatedAt().toString());
+        if (c.getAuthor() != null) {
+            m.put("authorName", c.getAuthor().getNickname());
+            m.put("authorId", c.getAuthor().getId());
+            m.put("authorAvatar", c.getAuthor().getAvatarPath() != null
+                ? "/uploads/" + c.getAuthor().getAvatarPath() : null);
+        }
+        return m;
     }
 }

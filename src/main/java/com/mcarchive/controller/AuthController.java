@@ -198,7 +198,8 @@ public class AuthController {
             "wechatQrCodeUrl", user.getWechatQrCode() != null
                 ? "/uploads/" + user.getWechatQrCode() : null,
             "alipayQrCodeUrl", user.getAlipayQrCode() != null
-                ? "/uploads/" + user.getAlipayQrCode() : null
+                ? "/uploads/" + user.getAlipayQrCode() : null,
+            "contactEmail", user.getContactEmail() != null ? user.getContactEmail() : null
         );
     }
 
@@ -368,6 +369,30 @@ public class AuthController {
             log.error("收款码上传失败", e);
             return ResponseEntity.status(500).body(Map.of("error", "收款码上传失败"));
         }
+    }
+
+    /**
+     * 更新联系邮箱
+     */
+    @PostMapping("/update-contact-email")
+    public ResponseEntity<?> updateContactEmail(@RequestBody Map<String, String> body) {
+        User user = currentUser.require();
+        String email = body.get("email");
+
+        if (email != null && !email.trim().isEmpty()) {
+            email = email.trim().toLowerCase();
+            if (!email.matches("^[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,}$")) {
+                return ResponseEntity.badRequest().body(Map.of("error", "邮箱格式不正确"));
+            }
+            user.setContactEmail(email);
+        } else {
+            user.setContactEmail(null);
+        }
+        userService.save(user);
+        return ResponseEntity.ok(Map.of(
+            "message", email != null ? "联系邮箱已更新" : "联系邮箱已清除",
+            "user", userToMap(user)
+        ));
     }
 
     // ===== 密码重置 =====

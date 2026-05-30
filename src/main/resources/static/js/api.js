@@ -83,6 +83,7 @@ MC.API = {
   async changePassword(oldPwd, newPwd) { return this._fetch('/api/auth/change-password', { method:'POST', body:JSON.stringify({oldPassword:oldPwd, newPassword:newPwd}) }); },
   async uploadAvatar(fd)   { return this._fetch('/api/auth/upload-avatar', { method:'POST', body:fd }); },
   async uploadQrCode(type, fd) { return this._fetch('/api/auth/upload-qrcode?type=' + type, { method:'POST', body:fd }); },
+  async updateContactEmail(email) { return this._fetch('/api/auth/update-contact-email', { method:'POST', body:JSON.stringify({email}) }); },
   async forgotPassword(email)  { return this._fetch('/api/auth/forgot-password',  { method:'POST', body:JSON.stringify({email}) }); },
   async resetPassword(token, password) { return this._fetch('/api/auth/reset-password', { method:'POST', body:JSON.stringify({token, password}) }); },
 
@@ -103,6 +104,10 @@ MC.API = {
   },
   async toggleLike(id)      { return this._fetch('/api/archives/' + id + '/like',     { method:'POST' }); },
   async toggleBookmark(id)  { return this._fetch('/api/archives/' + id + '/bookmark', { method:'POST' }); },
+  async toggleDislike(id)   { return this._fetch('/api/archives/' + id + '/dislike', { method:'POST' }); },
+  async getComments(id)     { return this._fetch('/api/archives/' + id + '/comments'); },
+  async addComment(id, content) { return this._fetch('/api/archives/' + id + '/comments', { method:'POST', body:JSON.stringify({content}) }); },
+  async deleteComment(commentId) { return this._fetch('/api/comments/' + commentId, { method:'DELETE' }); },
   async getMyArchives()     { return this._fetch('/api/archives/my/list'); },
   async getMyBookmarks()    { return this._fetch('/api/archives/my/bookmarks'); },
 };

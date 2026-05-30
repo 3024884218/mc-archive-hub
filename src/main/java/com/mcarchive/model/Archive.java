@@ -46,6 +46,10 @@ public class Archive {
     @Column(nullable = false)
     private int downloadCount = 0;
 
+    /** 踩数 */
+    @Column(nullable = false)
+    private int dislikeCount = 0;
+
     /** 浏览次数 */
     @Column(nullable = false)
     private int viewCount = 0;
@@ -93,6 +97,9 @@ public class Archive {
 
     public int getDownloadCount() { return downloadCount; }
     public void setDownloadCount(int downloadCount) { this.downloadCount = downloadCount; }
+
+    public int getDislikeCount() { return dislikeCount; }
+    public void setDislikeCount(int dislikeCount) { this.dislikeCount = dislikeCount; }
 
     public int getViewCount() { return viewCount; }
     public void setViewCount(int viewCount) { this.viewCount = viewCount; }
