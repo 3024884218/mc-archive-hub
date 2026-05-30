@@ -1,0 +1,36 @@
+# Build
+/build/
+/.gradle/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config (contains secrets)
+application-local.properties
+
+# Data
+/data/
+*.db
+*.db.bak
+
+# Uploads (local)
+/E:/mc-archive-uploads/
+mc-archive-uploads/
+
+# Logs
+*.log
+
+# Root-level QR codes (served from static/images/)
+/wx.jpg
+/zfb.jpg
