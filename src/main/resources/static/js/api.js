@@ -87,6 +87,15 @@ MC.API = {
   async forgotPassword(email)  { return this._fetch('/api/auth/forgot-password',  { method:'POST', body:JSON.stringify({email}) }); },
   async resetPassword(token, password) { return this._fetch('/api/auth/reset-password', { method:'POST', body:JSON.stringify({token, password}) }); },
 
+  // ===== 关注 =====
+  async toggleFollow(userId) { return this._fetch('/api/auth/follow/' + userId, { method:'POST' }); },
+  async getFollowing()       { return this._fetch('/api/auth/following'); },
+  async getFollowers()       { return this._fetch('/api/auth/followers'); },
+
+  // ===== 用户搜索 =====
+  async searchUsers(q)       { return this._fetch('/api/auth/search?q=' + encodeURIComponent(q)); },
+  async getUserProfile(id)   { return this._fetch('/api/auth/user/' + id); },
+
   // ===== Archives =====
   async listArchives(filters = {}) {
     const p = new URLSearchParams();

@@ -1,6 +1,8 @@
 package com.mcarchive.service;
 
+import com.mcarchive.model.Follow;
 import com.mcarchive.model.User;
+import com.mcarchive.repository.FollowRepository;
 import com.mcarchive.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,13 +31,16 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final FollowRepository followRepository;
 
     public UserService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       EmailService emailService) {
+                       EmailService emailService,
+                       FollowRepository followRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.followRepository = followRepository;
     }
 
     /**
@@ -282,5 +288,64 @@ public class UserService {
     @Transactional
     public void save(User user) {
         userRepository.save(user);
+    }
+
+    // ===== 关注功能 =====
+
+    /** 切换关注状态 */
+    @Transactional
+    public boolean toggleFollow(User follower, Long followingId) {
+        User following = userRepository.findById(followingId).orElse(null);
+        if (following == null) return false;
+        // 不能关注自己
+        if (follower.getId().equals(followingId)) return false;
+
+        if (followRepository.existsByFollowerAndFollowing(follower, following)) {
+            followRepository.deleteByFollowerAndFollowing(follower, following);
+            return false;
+        } else {
+            try {
+                Follow f = new Follow(follower, following);
+                followRepository.saveAndFlush(f);
+                return true;
+            } catch (DataIntegrityViolationException e) {
+                return true;
+            }
+        }
+    }
+
+    /** 检查是否已关注 */
+    public boolean isFollowing(User follower, Long followingId) {
+        User following = userRepository.findById(followingId).orElse(null);
+        if (following == null) return false;
+        return followRepository.existsByFollowerAndFollowing(follower, following);
+    }
+
+    /** 获取关注列表（ID） */
+    public List<Long> getFollowingIds(Long userId) {
+        return followRepository.findFollowingIdsByUserId(userId);
+    }
+
+    /** 获取粉丝列表（ID） */
+    public List<Long> getFollowerIds(Long userId) {
+        return followRepository.findFollowerIdsByUserId(userId);
+    }
+
+    /** 获取关注数 */
+    public long getFollowingCount(User user) {
+        return followRepository.countByFollower(user);
+    }
+
+    /** 获取粉丝数 */
+    public long getFollowerCount(User user) {
+        return followRepository.countByFollowing(user);
+    }
+
+    // ===== 搜索用户 =====
+
+    /** 按昵称搜索用户 */
+    public List<User> searchUsers(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) return List.of();
+        return userRepository.findByNicknameContainingIgnoreCase(keyword.trim());
     }
 }

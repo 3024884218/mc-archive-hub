@@ -18,6 +18,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -444,5 +445,90 @@ public class AuthController {
         } else {
             return ResponseEntity.badRequest().body(Map.of("error", "重置链接无效或已过期（5分钟有效）"));
         }
+    }
+
+    // ===== 关注作者 =====
+
+    /** 切换关注状态 */
+    @PostMapping("/follow/{userId}")
+    public ResponseEntity<?> toggleFollow(@PathVariable Long userId) {
+        User user = currentUser.require();
+        boolean following = userService.toggleFollow(user, userId);
+        return ResponseEntity.ok(Map.of(
+            "following", following,
+            "message", following ? "已关注" : "已取消关注"
+        ));
+    }
+
+    /** 获取我的关注列表 */
+    @GetMapping("/following")
+    public ResponseEntity<?> getFollowing() {
+        User user = currentUser.require();
+        List<Long> ids = userService.getFollowingIds(user.getId());
+        List<Map<String, Object>> users = ids.stream()
+            .map(userService::findById)
+            .filter(u -> u != null)
+            .map(u -> {
+                Map<String, Object> m = userToMap(u);
+                m.put("following", true);
+                return m;
+            })
+            .toList();
+        return ResponseEntity.ok(users);
+    }
+
+    /** 获取我的粉丝列表 */
+    @GetMapping("/followers")
+    public ResponseEntity<?> getFollowers() {
+        User user = currentUser.require();
+        List<Long> ids = userService.getFollowerIds(user.getId());
+        List<Map<String, Object>> users = ids.stream()
+            .map(userService::findById)
+            .filter(u -> u != null)
+            .map(u -> {
+                Map<String, Object> m = userToMap(u);
+                m.put("following", userService.isFollowing(user, u.getId()));
+                return m;
+            })
+            .toList();
+        return ResponseEntity.ok(users);
+    }
+
+    /** 搜索用户（按昵称） */
+    @GetMapping("/search")
+    public ResponseEntity<?> searchUsers(@RequestParam("q") String q) {
+        if (q == null || q.trim().isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+        User me = currentUser.getDetails() != null ? currentUser.getDetails().getUser() : null;
+        List<Map<String, Object>> results = userService.searchUsers(q).stream()
+            .map(u -> {
+                Map<String, Object> m = userToMap(u);
+                if (me != null && !me.getId().equals(u.getId())) {
+                    m.put("following", userService.isFollowing(me, u.getId()));
+                }
+                return m;
+            })
+            .toList();
+        return ResponseEntity.ok(results);
+    }
+
+    /** 查看用户主页（含关注数/粉丝数/是否已关注） */
+    @GetMapping("/user/{id}")
+    public ResponseEntity<?> getUserProfile(@PathVariable Long id) {
+        User target = userService.findById(id);
+        if (target == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Map<String, Object> profile = userToMap(target);
+        profile.put("followingCount", userService.getFollowingCount(target));
+        profile.put("followerCount", userService.getFollowerCount(target));
+
+        User me = currentUser.getDetails() != null ? currentUser.getDetails().getUser() : null;
+        if (me != null && !me.getId().equals(id)) {
+            profile.put("following", userService.isFollowing(me, id));
+        }
+        return ResponseEntity.ok(profile);
     }
 }

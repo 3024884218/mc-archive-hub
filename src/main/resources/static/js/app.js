@@ -1056,6 +1056,9 @@ MC.renderAuthorPage = async function() {
       '<h2 class="section-title">' + MC.UI.esc(authorName) + ' 的存档</h2>' +
       '<span style="font-size:var(--fs-sm);color:var(--c-text-tertiary)">共 ' + (MC.State.totalElements || archives.length) + ' 个</span>' +
     '</div>' +
+    (MC.State.currentUser && MC.State.currentUser.id !== authorId
+      ? '<div style="margin-bottom:var(--sp-4)"><button class="follow-btn" id="author-follow-btn" onclick="MC.handleFollow(' + authorId + ',this)">👤 关注作者</button></div>'
+      : '') +
     '<div class="archive-grid" id="archive-grid">' +
       (archives.length === 0
         ? MC.UI.emptyState('📭', '暂无存档', '该作者还没有发布任何存档')
@@ -1066,6 +1069,19 @@ MC.renderAuthorPage = async function() {
   '</div>';
 
   MC.renderPagination();
+
+  // 检查关注状态
+  if (MC.State.currentUser && MC.State.currentUser.id !== authorId) {
+    setTimeout(function() {
+      MC.API.getUserProfile(authorId).then(function(profile) {
+        var btn = document.getElementById('author-follow-btn');
+        if (btn && profile.following) {
+          btn.textContent = '✓ 已关注';
+          btn.classList.add('following');
+        }
+      }).catch(function(){});
+    }, 100);
+  }
 };
 
 // ================================================================
@@ -1209,11 +1225,109 @@ MC.renderProfile = async function() {
         : myDownloads.map((a, i) => MC.UI.archiveCard(a, i)).join('')
       }
     </div>
+    <div id="profile-follow-section" style="background:var(--c-surface);border:1px solid var(--c-border-light);border-radius:var(--r-lg);padding:var(--sp-6);margin-top:var(--sp-8)">
+      <p style="color:var(--c-text-tertiary);text-align:center">加载中...</p>
+    </div>
   </div>`;
+
+  // 异步加载关注/粉丝数据
+  setTimeout(function() { MC.loadProfileFollowData(); }, 100);
 };
 
 // ================================================================
-// 绑定邮箱弹窗
+// 关注功能
+// ================================================================
+
+/** 加载 Profile 页的关注/粉丝数据 */
+MC.loadProfileFollowData = async function() {
+  if (!MC.State.currentUser) return;
+  try {
+    var following = await MC.API.getFollowing();
+    var followers = await MC.API.getFollowers();
+  } catch(e) { return; }
+
+  var section = document.getElementById('profile-follow-section');
+  if (!section) return;
+
+  section.innerHTML = '<h3 style="font-size:var(--fs-lg);font-weight:var(--fw-semibold);margin-bottom:var(--sp-4)">'
+    + '关注 <span style="color:var(--c-text-tertiary);font-size:var(--fs-sm)">(' + following.length + '人关注)</span></h3>'
+    + (following.length === 0
+      ? '<p style="font-size:var(--fs-sm);color:var(--c-text-tertiary);text-align:center;padding:var(--sp-4)">还没有关注任何作者，去 <a href="#" onclick="MC.navigate(\'home\')" style="color:var(--c-primary)">发现页</a> 看看吧</p>'
+      : '<div class="author-list">' + following.map(function(u) {
+          return '<div class="author-item" onclick="MC.navigateAuthor(' + u.id + ',\'' + MC.UI.esc(u.nickname || u.username) + '\')">'
+            + '<div class="author-avatar" style="' + (u.avatarUrl ? 'background-image:url(' + u.avatarUrl + ');background-size:cover' : '') + '">'
+            + (u.avatarUrl ? '' : MC.UI.esc((u.nickname || u.username)[0]))
+            + '</div>'
+            + '<div class="author-info"><span class="author-name">' + MC.UI.esc(u.nickname || u.username) + '</span></div>'
+            + '</div>';
+        }).join('') + '</div>');
+};
+
+/** 切换关注 */
+MC.handleFollow = async function(userId, btnEl) {
+  if (!MC.State.currentUser) return MC.openAuthModal('login');
+  try {
+    var result = await MC.API.toggleFollow(userId);
+    MC.Toast.show(result.message, 'success');
+    // 更新按钮状态
+    if (btnEl) {
+      btnEl.textContent = result.following ? '✓ 已关注' : '+ 关注';
+      btnEl.classList.toggle('following', result.following);
+    }
+    return result.following;
+  } catch(e) {
+    MC.Toast.show(e.message, 'error');
+  }
+};
+
+/** 打开作者搜索弹窗 */
+MC.openAuthorSearch = function() {
+  var content = document.getElementById('auth-modal-content');
+  content.innerHTML = '<div class="modal-header">'
+    + '<h2 class="modal-title">🔍 搜索作者</h2>'
+    + '<button class="modal-close" onclick="MC.Modal.close(\'auth-modal\')">&times;</button>'
+    + '</div>'
+    + '<div class="modal-body">'
+    + '<input class="form-input" id="author-search-input" type="text" placeholder="输入作者昵称..." '
+    + 'onkeydown="if(event.key===\'Enter\')MC.doAuthorSearch()" autofocus>'
+    + '<div id="author-search-results" style="margin-top:12px;max-height:400px;overflow-y:auto"></div>'
+    + '</div>';
+  MC.Modal.open('auth-modal');
+  setTimeout(function() {
+    var inp = document.getElementById('author-search-input');
+    if (inp) inp.focus();
+  }, 100);
+};
+
+/** 执行作者搜索 */
+MC.doAuthorSearch = async function() {
+  var q = document.getElementById('author-search-input').value.trim();
+  var results = document.getElementById('author-search-results');
+  if (!q) { results.innerHTML = ''; return; }
+
+  results.innerHTML = '<p style="text-align:center;color:var(--c-text-tertiary);padding:var(--sp-4)">搜索中...</p>';
+  try {
+    var users = await MC.API.searchUsers(q);
+    if (users.length === 0) {
+      results.innerHTML = '<p style="text-align:center;color:var(--c-text-tertiary);padding:var(--sp-4)">未找到匹配的作者</p>';
+      return;
+    }
+    results.innerHTML = '<div class="author-list">' + users.map(function(u) {
+      return '<div class="author-item" style="cursor:pointer" onclick="MC.Modal.close(\'auth-modal\');MC.navigateAuthor(' + u.id + ',\'' + MC.UI.esc(u.nickname || u.username) + '\')">'
+        + '<div class="author-avatar" style="' + (u.avatarUrl ? 'background-image:url(' + u.avatarUrl + ');background-size:cover' : '') + '">'
+        + (u.avatarUrl ? '' : MC.UI.esc((u.nickname || u.username)[0]))
+        + '</div>'
+        + '<div class="author-info"><span class="author-name">' + MC.UI.esc(u.nickname || u.username) + '</span>'
+        + '<span style="font-size:var(--fs-xs);color:var(--c-text-tertiary)">@' + MC.UI.esc(u.username) + '</span></div>'
+        + (u.following === false
+          ? '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();MC.handleFollow(' + u.id + ',this)" style="margin-left:auto">+ 关注</button>'
+          : (u.following === true ? '<span style="margin-left:auto;font-size:var(--fs-xs);color:var(--c-primary)">已关注</span>' : ''))
+        + '</div>';
+    }).join('') + '</div>';
+  } catch(e) {
+    results.innerHTML = '<p style="text-align:center;color:var(--c-error);padding:var(--sp-4)">搜索失败</p>';
+  }
+};
 // ================================================================
 MC.openBindEmailModal = function() {
   if (!MC.State.currentUser) return;

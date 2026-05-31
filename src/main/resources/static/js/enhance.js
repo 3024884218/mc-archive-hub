@@ -285,6 +285,27 @@ MC.renderDetail = async function(id) {
       }
     }
 
+    // 关注按钮（登录用户 & 非作者本人）
+    if (MC.State.currentUser && a.authorId && MC.State.currentUser.id !== a.authorId) {
+      var authorRow = document.querySelector('.detail-author-row');
+      if (authorRow) {
+        authorRow.insertAdjacentHTML('afterend',
+          '<div style="margin-bottom:12px">'
+          + '<button class="follow-btn" id="detail-follow-btn" onclick="MC.handleFollow(' + a.authorId + ',this)">'
+          + '👤 关注作者</button>'
+          + '</div>'
+        );
+        // 检查是否已关注
+        MC.API.getUserProfile(a.authorId).then(function(profile) {
+          var btn = document.getElementById('detail-follow-btn');
+          if (btn && profile.following) {
+            btn.textContent = '✓ 已关注';
+            btn.classList.add('following');
+          }
+        }).catch(function(){});
+      }
+    }
+
     // 文件大小
     if (a.fileSize) {
       var downloadBtn = document.querySelector('.detail-actions .btn-primary');

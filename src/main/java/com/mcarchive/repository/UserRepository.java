@@ -4,6 +4,7 @@ import com.mcarchive.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import java.util.Optional;
+import java.util.List;
 
 /**
  * 用户数据访问层
@@ -28,4 +29,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 按密码重置令牌查找用户 */
     Optional<User> findByPasswordResetToken(String token);
+
+    /** 按昵称模糊搜索用户 */
+    List<User> findByNicknameContainingIgnoreCase(String nickname);
 }
