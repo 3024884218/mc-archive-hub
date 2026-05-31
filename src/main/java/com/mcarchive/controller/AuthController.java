@@ -190,16 +190,16 @@ public class AuthController {
         return Map.of(
             "id", user.getId(),
             "username", user.getUsername(),
-            "nickname", user.getNickname(),
+            "nickname", user.getNickname() != null ? user.getNickname() : "",
             "email", user.getEmail() != null ? user.getEmail() : "",
             "emailVerified", user.isEmailVerified(),
             "avatarUrl", user.getAvatarPath() != null
                 ? "/uploads/" + user.getAvatarPath() : "",
             "wechatQrCodeUrl", user.getWechatQrCode() != null
-                ? "/uploads/" + user.getWechatQrCode() : null,
+                ? "/uploads/" + user.getWechatQrCode() : "",
             "alipayQrCodeUrl", user.getAlipayQrCode() != null
-                ? "/uploads/" + user.getAlipayQrCode() : null,
-            "contactEmail", user.getContactEmail() != null ? user.getContactEmail() : null
+                ? "/uploads/" + user.getAlipayQrCode() : "",
+            "contactEmail", user.getContactEmail() != null ? user.getContactEmail() : ""
         );
     }
 
