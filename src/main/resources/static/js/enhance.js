@@ -30,8 +30,10 @@ MC.renderPagination = function() {
 };
 
 MC.goPage = function(page) {
-  MC.State.currentPage = Math.max(0, Math.min(page, MC.State.totalPages - 1));
+  MC.State.currentPage = Math.max(0, Math.min(page, Math.max(0, MC.State.totalPages - 1)));
   MC.renderHome(false);
+  // 滚动到顶部
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 // ===== Markdown 简易渲染 =====
@@ -208,6 +210,22 @@ MC.renderDetail = async function(id) {
 
   // 等待 DOM
   setTimeout(function() {
+    // 主图点击放大
+    var mainImg = document.getElementById('detail-main-img');
+    if (mainImg && a.images && a.images.length > 0) {
+      mainImg.style.cursor = 'zoom-in';
+      var allUrls = a.images.map(function(img) { return img.url; });
+      mainImg.onclick = function() { MC.openLightbox(mainImg.src, allUrls); };
+      // 缩略图点击也打开灯箱
+      var thumbs = document.querySelectorAll('.detail-thumb');
+      thumbs.forEach(function(thumb, i) {
+        thumb.onclick = function(e) {
+          e.stopPropagation();
+          MC.openLightbox(thumb.src, allUrls);
+        };
+      });
+    }
+
     // 作者本人显示编辑/删除
     if (MC.State.currentUser && MC.State.currentUser.id === a.authorId) {
       var actions = document.querySelector('.detail-actions');
@@ -256,6 +274,25 @@ MC.renderDetail = async function(id) {
       }
     }
 
+    // 作者名可点击
+    if (a.authorId) {
+      var authorNameEl = document.querySelector('.detail-author-name');
+      if (authorNameEl) {
+        authorNameEl.style.cursor = 'pointer';
+        authorNameEl.style.color = 'var(--c-primary)';
+        authorNameEl.title = '查看作者所有存档';
+        authorNameEl.onclick = function() { MC.navigateAuthor(a.authorId, a.authorName); };
+      }
+    }
+
+    // 文件大小
+    if (a.fileSize) {
+      var downloadBtn = document.querySelector('.detail-actions .btn-primary');
+      if (downloadBtn) {
+        downloadBtn.insertAdjacentHTML('beforeend', ' <span style="font-size:11px;opacity:0.8">(' + MC.UI.fmtSize(a.fileSize) + ')</span>');
+      }
+    }
+
     // 浏览量显示
     if (a.viewCount !== undefined) {
       var date = document.querySelector('.detail-date');
@@ -295,10 +332,22 @@ MC.renderDetail = async function(id) {
             '<input class="comment-input" id="comment-input" type="text" placeholder="发表评论..." maxlength="2000" onkeydown="if(event.key===\'Enter\')MC.handleAddComment(' + a.id + ')">' +
             '<button class="comment-submit" id="comment-submit" onclick="MC.handleAddComment(' + a.id + ')">发送</button>' +
             '</div>'
-          : '<p style="font-size:var(--fs-sm);color:var(--c-text-tertiary);text-align:center;margin-top:var(--sp-3)"><a href="#" onclick="MC.openAuthModal(\'login\')" style="color:var(--c-primary)">登录</a>后即可评论</p>');
-      info.appendChild(sec);
-    }).catch(function(){});
-  }, 200);
+	      info.appendChild(sec);
+	    }).catch(function(){});
+
+	    // 加载相关推荐
+	    MC.API.getRelatedArchives(a.id).then(function(related) {
+	      if (!related || related.length === 0) return;
+	      var info2 = document.querySelector('.detail-info');
+	      if (!info2) return;
+	      var relSec = document.createElement('div');
+	      relSec.className = 'related-section';
+	      relSec.innerHTML = '<h3 class="comments-title">📦 相关推荐</h3><div class="archive-grid" style="grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:12px">' +
+	        related.map(function(r, i) { return MC.UI.archiveCard(r, i); }).join('') +
+	        '</div>';
+	      info2.appendChild(relSec);
+	    }).catch(function(){});
+	  }, 200);
 };
 
 })();

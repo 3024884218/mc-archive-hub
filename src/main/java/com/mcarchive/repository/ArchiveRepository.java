@@ -98,12 +98,12 @@ public interface ArchiveRepository extends JpaRepository<Archive, Long> {
          + "(:mcVersion = '' OR a.mcVersion = :mcVersion) AND "
          + "(:modLoader = '' OR a.modLoader = :modLoader) "
          + "ORDER BY "
-         + "CASE WHEN :sortPopular = true THEN a.likeCount ELSE 0 END DESC, "
+         + "CASE WHEN :sortMode = 'popular' THEN a.likeCount WHEN :sortMode = 'downloads' THEN a.downloadCount ELSE 0 END DESC, "
          + "a.createdAt DESC")
     Page<Archive> findByFiltersPaged(@Param("category") String category,
                                       @Param("mcVersion") String mcVersion,
                                       @Param("modLoader") String modLoader,
-                                      @Param("sortPopular") boolean sortPopular,
+                                      @Param("sortMode") String sortMode,
                                       Pageable pageable);
 
     @Query("SELECT a FROM Archive a WHERE "

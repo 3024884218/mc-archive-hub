@@ -58,6 +58,10 @@ public class Archive {
     @Column(length = 500)
     private String filePath;
 
+    /** 存档文件大小（字节） */
+    @Column
+    private Long fileSize;
+
     /** 发布者 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id", nullable = false)
@@ -106,6 +110,9 @@ public class Archive {
 
     public String getFilePath() { return filePath; }
     public void setFilePath(String filePath) { this.filePath = filePath; }
+
+    public Long getFileSize() { return fileSize; }
+    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
 
     public User getAuthor() { return author; }
     public void setAuthor(User author) { this.author = author; }

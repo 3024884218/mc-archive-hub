@@ -31,6 +31,8 @@ public class ArchiveService {
     private final BookmarkRepository bookmarkRepository;
     private final DislikeRepository dislikeRepository;
     private final CommentRepository commentRepository;
+    private final DownloadRecordRepository downloadRecordRepository;
+    private final NotificationRepo notificationRepo;
     private final FileStorageService fileStorageService;
 
     public ArchiveService(ArchiveRepository archiveRepository,
@@ -38,12 +40,16 @@ public class ArchiveService {
                           BookmarkRepository bookmarkRepository,
                           DislikeRepository dislikeRepository,
                           CommentRepository commentRepository,
+                          DownloadRecordRepository downloadRecordRepository,
+                          NotificationRepo notificationRepo,
                           FileStorageService fileStorageService) {
         this.archiveRepository = archiveRepository;
         this.likeRepository = likeRepository;
         this.bookmarkRepository = bookmarkRepository;
         this.dislikeRepository = dislikeRepository;
         this.commentRepository = commentRepository;
+        this.downloadRecordRepository = downloadRecordRepository;
+        this.notificationRepo = notificationRepo;
         this.fileStorageService = fileStorageService;
     }
 
@@ -72,6 +78,7 @@ public class ArchiveService {
             MultipartFile archiveFile = req.getFile();
             if (archiveFile != null && !archiveFile.isEmpty()) {
                 archive.setFilePath(fileStorageService.storeArchiveFile(archive.getId(), archiveFile));
+                archive.setFileSize(archiveFile.getSize());
             }
 
             List<MultipartFile> images = req.getImages();
@@ -158,16 +165,17 @@ public class ArchiveService {
     // ===== 分页查询（修复无分页问题） =====
 
     /**
-     * 多条件筛选存档（分页版）
+     * 多条件筛选存档（分页版，支持 popular/newest/downloads 排序）
      */
     public Page<Archive> getArchivesByFiltersPaged(String category, String mcVersion,
-                                                    String modLoader, boolean sortPopular,
+                                                    String modLoader, String sort,
                                                     int page, int size) {
         String cat = (category == null || category.isEmpty() || "all".equals(category)) ? "" : category;
         String ver = (mcVersion == null || mcVersion.isEmpty() || "all".equals(mcVersion)) ? "" : mcVersion;
         String loader = (modLoader == null || modLoader.isEmpty() || "all".equals(modLoader)) ? "" : modLoader;
+        String sortMode = (sort == null) ? "popular" : sort;
         Pageable pageable = PageRequest.of(page, size);
-        return archiveRepository.findByFiltersPaged(cat, ver, loader, sortPopular, pageable);
+        return archiveRepository.findByFiltersPaged(cat, ver, loader, sortMode, pageable);
     }
 
     /**
@@ -175,7 +183,7 @@ public class ArchiveService {
      */
     public Page<Archive> searchArchivesPaged(String keyword, int page, int size) {
         if (keyword == null || keyword.trim().isEmpty()) {
-            return getArchivesByFiltersPaged("", "", "", false, page, size);
+            return getArchivesByFiltersPaged("", "", "", "newest", page, size);
         }
         return archiveRepository.searchPaged(keyword.trim(), PageRequest.of(page, size));
     }
@@ -208,6 +216,11 @@ public class ArchiveService {
                 LikeRecord record = new LikeRecord(user, archive);
                 likeRepository.saveAndFlush(record);
                 archiveRepository.incrementLikeCount(archiveId);
+                // 通知作者（不通知自己）
+                if (!archive.getAuthor().getId().equals(user.getId())) {
+                    createNotification(archive.getAuthor().getId(), "like", archiveId,
+                        user.getNickname(), archive.getTitle());
+                }
                 return true;
             } catch (org.springframework.dao.DataIntegrityViolationException e) {
                 // 并发时记录已存在，说明已经被点赞，视为取消失败，返回已点赞状态
@@ -278,6 +291,27 @@ public class ArchiveService {
     @Transactional
     public void incrementDownloadCount(Long archiveId) {
         archiveRepository.incrementDownloadCount(archiveId);
+    }
+
+    /** 记录下载历史 */
+    @Transactional
+    public void recordDownload(Long userId, Long archiveId) {
+        if (!downloadRecordRepository.existsByUserIdAndArchiveId(userId, archiveId)) {
+            try {
+                downloadRecordRepository.saveAndFlush(new DownloadRecord(userId, archiveId));
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // 并发重复，忽略
+            }
+        }
+    }
+
+    /** 获取用户下载历史 */
+    public List<Archive> getDownloadedArchives(Long userId) {
+        List<DownloadRecord> records = downloadRecordRepository.findByUserIdOrderByDownloadedAtDesc(userId);
+        return records.stream()
+            .map(r -> archiveRepository.findById(r.getArchiveId()).orElse(null))
+            .filter(a -> a != null)
+            .toList();
     }
 
     @Transactional
@@ -411,7 +445,42 @@ public class ArchiveService {
         comment.setArchive(archive);
         comment.setContent(content.trim());
         comment.setCreatedAt(LocalDateTime.now());
-        return commentRepository.save(comment);
+        Comment saved = commentRepository.save(comment);
+
+        // 通知作者（不通知自己）
+        if (!archive.getAuthor().getId().equals(user.getId())) {
+            createNotification(archive.getAuthor().getId(), "comment", archiveId,
+                user.getNickname(), archive.getTitle());
+        }
+
+        return saved;
+    }
+
+    private void createNotification(Long userId, String type, Long archiveId,
+                                     String actorName, String archiveTitle) {
+        try {
+            Notification n = new Notification(userId, type, archiveId, actorName, archiveTitle);
+            notificationRepo.save(n);
+        } catch (Exception e) {
+            // 通知创建失败不影响主流程
+        }
+    }
+
+    public long getUnreadNotificationCount(Long userId) {
+        return notificationRepo.countByUserIdAndReadFalse(userId);
+    }
+
+    public List<Notification> getNotifications(Long userId) {
+        return notificationRepo.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    @Transactional
+    public void markAllNotificationsRead(Long userId) {
+        var unread = notificationRepo.findByUserIdAndReadFalseOrderByCreatedAtDesc(userId);
+        for (Notification n : unread) {
+            n.setRead(true);
+        }
+        notificationRepo.saveAll(unread);
     }
 
     /** 获取存档的所有评论 */

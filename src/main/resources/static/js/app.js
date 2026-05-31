@@ -80,16 +80,63 @@ MC.toggleTheme = function() {
   MC.Theme.toggle();
 };
 
+// 移动端导航菜单
+MC.toggleMobileNav = function() {
+  var nav = document.getElementById('nav-links');
+  var btn = document.getElementById('hamburger-btn');
+  if (nav) nav.classList.toggle('nav-open');
+  if (btn) btn.classList.toggle('open');
+};
+
 // ================================================================
-// 灯箱放大
+// 灯箱放大（支持多图导航）
 // ================================================================
-MC.openLightbox = function(src) {
+MC._lightboxImages = [];
+MC._lightboxIndex = 0;
+
+MC.openLightbox = function(src, images) {
   var img = document.getElementById('lightbox-img');
   var overlay = document.getElementById('lightbox');
-  if (img && overlay) {
-    img.src = src;
-    overlay.classList.remove('hidden');
+  if (!img || !overlay) return;
+
+  // 支持传入图片数组或单张图片
+  if (images && images.length > 0) {
+    MC._lightboxImages = images;
+    MC._lightboxIndex = images.indexOf(src);
+    if (MC._lightboxIndex < 0) MC._lightboxIndex = 0;
+  } else {
+    MC._lightboxImages = [src];
+    MC._lightboxIndex = 0;
   }
+
+  MC._updateLightboxImage();
+  overlay.classList.remove('hidden');
+};
+
+MC._updateLightboxImage = function() {
+  var img = document.getElementById('lightbox-img');
+  if (img && MC._lightboxImages[MC._lightboxIndex]) {
+    img.src = MC._lightboxImages[MC._lightboxIndex];
+  }
+  // 更新导航按钮
+  var prevBtn = document.getElementById('lightbox-prev');
+  var nextBtn = document.getElementById('lightbox-next');
+  if (prevBtn) prevBtn.style.display = MC._lightboxImages.length > 1 ? '' : 'none';
+  if (nextBtn) nextBtn.style.display = MC._lightboxImages.length > 1 ? '' : 'none';
+};
+
+MC.lightboxPrev = function(e) {
+  e.stopPropagation();
+  if (MC._lightboxImages.length <= 1) return;
+  MC._lightboxIndex = (MC._lightboxIndex - 1 + MC._lightboxImages.length) % MC._lightboxImages.length;
+  MC._updateLightboxImage();
+};
+
+MC.lightboxNext = function(e) {
+  e.stopPropagation();
+  if (MC._lightboxImages.length <= 1) return;
+  MC._lightboxIndex = (MC._lightboxIndex + 1) % MC._lightboxImages.length;
+  MC._updateLightboxImage();
 };
 
 MC.closeLightbox = function() {
@@ -137,6 +184,66 @@ MC.openSponsorModal = function(wxUrl, zfbUrl, authorName) {
     '</div>';
 
   MC.Modal.open('auth-modal');
+};
+
+// ================================================================
+// 通知系统
+// ================================================================
+MC.updateNotifBadge = async function() {
+  if (!MC.State.currentUser) return;
+  var bell = document.getElementById('notification-bell');
+  if (!bell) return;
+  try {
+    var r = await MC.API.getUnreadNotifCount();
+    var count = r.count || 0;
+    bell.style.display = '';
+    var badge = document.getElementById('notif-badge');
+    if (badge) {
+      badge.textContent = count > 99 ? '99+' : count;
+      badge.classList.toggle('hidden', count === 0);
+    }
+  } catch (e) {
+    // 静默失败
+  }
+};
+
+MC.openNotifications = async function() {
+  if (!MC.State.currentUser) return;
+  try {
+    var notifs = await MC.API.getNotifications();
+    // 标记全部已读
+    MC.API.markNotifsRead().catch(function(){});
+    MC.updateNotifBadge();
+
+    var content = document.getElementById('auth-modal-content');
+    content.innerHTML = '<div class="modal-header">' +
+      '<h2 class="modal-title">🔔 通知</h2>' +
+      '<button class="modal-close" onclick="MC.Modal.close(\'auth-modal\')" aria-label="关闭">&times;</button>' +
+      '</div>' +
+      '<div class="modal-body">' +
+      (notifs.length === 0
+        ? '<p style="text-align:center;color:var(--c-text-tertiary);padding:var(--sp-6)">暂无通知</p>'
+        : notifs.map(function(n) {
+            var icon = n.type === 'comment' ? '💬' : '❤️';
+            var text = n.type === 'comment'
+              ? '<strong>' + MC.UI.esc(n.actorName) + '</strong> 评论了你的存档 <strong>' + MC.UI.esc(n.archiveTitle) + '</strong>'
+              : '<strong>' + MC.UI.esc(n.actorName) + '</strong> 点赞了你的存档 <strong>' + MC.UI.esc(n.archiveTitle) + '</strong>';
+            return '<div class="notif-item' + (!n.read ? ' unread' : '') + '" onclick="MC.Modal.close(\'auth-modal\');MC.navigate(\'detail\',' + n.archiveId + ')" style="cursor:pointer;padding:12px;border-bottom:1px solid var(--c-border-light);transition:background var(--t-fast)">' +
+              '<div style="display:flex;align-items:flex-start;gap:10px">' +
+              '<span style="font-size:20px">' + icon + '</span>' +
+              '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:var(--fs-sm);line-height:1.4">' + text + '</div>' +
+              '<div style="font-size:var(--fs-xs);color:var(--c-text-tertiary);margin-top:4px">' + MC.UI.fmtDate(n.createdAt) + '</div>' +
+              '</div>' +
+              (!n.read ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--c-primary);flex-shrink:0;margin-top:6px"></span>' : '') +
+              '</div></div>';
+          }).join('')
+      ) +
+      '</div>';
+    MC.Modal.open('auth-modal');
+  } catch (e) {
+    MC.Toast.show('加载通知失败', 'error');
+  }
 };
 
 // ================================================================
@@ -400,6 +507,49 @@ MC.openUploadModal = function() {
     </div>`;
 
   MC.Modal.open('upload-modal');
+
+  // 恢复草稿
+  setTimeout(function() {
+    var draft = MC._loadDraft();
+    if (draft) {
+      if (draft.title) { var tEl = document.getElementById('up-title'); if (tEl) tEl.value = draft.title; }
+      if (draft.cat) { var cEl = document.getElementById('up-cat'); if (cEl) cEl.value = draft.cat; }
+      if (draft.ver) { var vEl = document.getElementById('up-ver'); if (vEl) vEl.value = draft.ver; }
+      if (draft.loader) { var lEl = document.getElementById('up-loader'); if (lEl) lEl.value = draft.loader; }
+      if (draft.desc) { var dEl = document.getElementById('up-desc'); if (dEl) dEl.value = draft.desc; }
+      MC.Toast.show('已恢复上次未完成的表单 📝', 'info');
+    }
+
+    // 绑定自动保存
+    ['up-title', 'up-cat', 'up-ver', 'up-loader', 'up-desc'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', MC._saveDraft);
+    });
+  }, 150);
+};
+
+MC._saveDraft = function() {
+  var draft = {
+    title: (document.getElementById('up-title') || {}).value || '',
+    cat: (document.getElementById('up-cat') || {}).value || '',
+    ver: (document.getElementById('up-ver') || {}).value || '',
+    loader: (document.getElementById('up-loader') || {}).value || '',
+    desc: (document.getElementById('up-desc') || {}).value || '',
+  };
+  if (draft.title || draft.desc) {
+    sessionStorage.setItem('mc-upload-draft', JSON.stringify(draft));
+  }
+};
+
+MC._loadDraft = function() {
+  try {
+    var raw = sessionStorage.getItem('mc-upload-draft');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+};
+
+MC._clearDraft = function() {
+  sessionStorage.removeItem('mc-upload-draft');
 };
 
 MC.handleImageSelect = function(e) {
@@ -454,6 +604,7 @@ MC.handleUpload = async function() {
 
   try {
     await MC.API.createArchive(fd);
+    MC._clearDraft();
     MC.Modal.close('upload-modal');
     MC.Toast.show('存档发布成功！🎉', 'success');
     MC.navigate('home');
@@ -481,8 +632,17 @@ MC.handleLike = async function(id, evt) {
       const countEl = document.getElementById('detail-like-count');
       if (countEl) countEl.textContent = r.likeCount;
     }
+    // 即时更新卡片上的点赞按钮
+    var card = document.querySelector('.archive-card[data-id="' + id + '"]');
+    if (card) {
+      var btn = card.querySelector('.card-action-btn');
+      if (btn) {
+        btn.classList.toggle('liked', r.liked);
+        var span = btn.querySelector('span');
+        if (span) span.textContent = r.likeCount || 0;
+      }
+    }
     MC.Toast.show(r.liked ? '已点赞 ❤️' : '已取消点赞', r.liked ? 'success' : 'info');
-    MC.renderPage();
   } catch (e) {
     MC.Toast.show(e.message, 'error');
   }
@@ -496,8 +656,13 @@ MC.handleBookmark = async function(id, evt) {
     const r = await MC.API.toggleBookmark(id);
     const bmBtn = document.getElementById('detail-bookmark-btn');
     if (bmBtn) bmBtn.classList.toggle('bookmarked', r.bookmarked);
+    // 即时更新卡片上的收藏按钮
+    var card = document.querySelector('.archive-card[data-id="' + id + '"]');
+    if (card) {
+      var bmCardBtn = card.querySelector('.card-action-btn:last-of-type');
+      if (bmCardBtn) bmCardBtn.classList.toggle('bookmarked', r.bookmarked);
+    }
     MC.Toast.show(r.bookmarked ? '已加入收藏 ⭐' : '已取消收藏', r.bookmarked ? 'success' : 'info');
-    MC.renderPage();
   } catch (e) {
     MC.Toast.show(e.message, 'error');
   }
@@ -579,7 +744,82 @@ MC.navigate = function(page, data) {
   document.querySelectorAll('.nav-link').forEach(el =>
     el.classList.toggle('active', el.dataset.nav === page));
 
+  // 更新浏览器 URL
+  var url = '/';
+  if (page === 'detail' && data) {
+    url = '/archive/' + data;
+  } else if (page === 'profile') {
+    url = '/profile';
+  }
+  if (window.location.pathname !== url) {
+    history.pushState({ page: page, data: data }, '', url);
+  }
+
   MC.renderPage(data);
+};
+
+// 从 URL 解析路由状态
+MC._parseRoute = function() {
+  var path = window.location.pathname;
+  if (path === '/profile') {
+    return { page: 'profile', data: null };
+  }
+  var archiveMatch = path.match(/^\/archive\/(\d+)$/);
+  if (archiveMatch) {
+    return { page: 'detail', data: parseInt(archiveMatch[1]) };
+  }
+  var authorMatch = path.match(/^\/author\/(\d+)$/);
+  if (authorMatch) {
+    var id = parseInt(authorMatch[1]);
+    MC.State.authorId = id;
+    MC.State.currentPage = 0;
+    return { page: 'author', data: { id: id } };
+  }
+  return { page: 'home', data: null };
+};
+
+// 监听浏览器前进/后退
+window.addEventListener('popstate', function(e) {
+  if (e.state && e.state.page) {
+    MC.State.currentPage = e.state.page;
+    MC.State.searchQuery = '';
+    MC.State.archiveDetail = null;
+    var inp = document.getElementById('search-input');
+    if (inp) inp.value = '';
+    var clearBtn = document.getElementById('search-clear');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    document.querySelectorAll('.nav-link').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.nav === e.state.page);
+    });
+    MC.renderPage(e.state.data);
+  } else {
+    // 页面首次加载或手动输入 URL
+    var route = MC._parseRoute();
+    MC.State.currentPage = route.page;
+    document.querySelectorAll('.nav-link').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.nav === route.page);
+    });
+    MC.renderPage(route.data);
+  }
+});
+
+// 导航到作者存档列表
+MC.navigateAuthor = function(authorId, authorName) {
+  if (!authorId) return;
+  MC.State.currentPage = 'author';
+  MC.State.authorId = authorId;
+  MC.State.authorName = authorName;
+  MC.State.searchQuery = '';
+  MC.State.currentPage = 0;
+  var inp = document.getElementById('search-input');
+  if (inp) inp.value = '';
+  var clearBtn = document.getElementById('search-clear');
+  if (clearBtn) clearBtn.classList.add('hidden');
+  document.querySelectorAll('.nav-link').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  history.pushState({ page: 'author', data: { id: authorId, name: authorName } }, '', '/author/' + authorId);
+  MC.renderAuthorPage();
 };
 
 // ================================================================
@@ -588,6 +828,7 @@ MC.navigate = function(page, data) {
 MC.doSearch = function() {
   const q = document.getElementById('search-input').value.trim();
   MC.State.searchQuery = q;
+  MC.State.currentPage = 0;
   document.getElementById('search-clear').classList.toggle('hidden', !q);
 
   if (q) {
@@ -614,6 +855,7 @@ MC.renderPage = function(data) {
   if (p === 'home') MC.renderHome();
   else if (p === 'profile') MC.renderProfile();
   else if (p === 'detail') MC.renderDetail(data || MC.State.archiveDetail?.id);
+  else if (p === 'author') MC.renderAuthorPage();
   else MC.renderHome(); // fallback
 };
 
@@ -641,13 +883,14 @@ MC.renderHome = async function(fullRender) {
               <div class="sort-toggle" id="sort-toggle">
                 ${MC.SORT_OPTIONS.map(s =>
                   `<button class="sort-btn ${MC.State.sortMode === s.id ? 'active' : ''}"
-                    onclick="MC.State.sortMode='${s.id}';MC.renderHome(false)">${s.label}</button>`
+                    onclick="MC.State.sortMode='${s.id}';MC.State.currentPage=0;MC.renderHome(false)">${s.label}</button>`
                 ).join('')}
               </div>
             </div>
             <div class="archive-grid" id="archive-grid">
               ${MC.UI.skeletonGrid(6)}
             </div>
+            <div class="pagination" id="pagination"></div>
           </div>
         </div>
       </div>`;
@@ -660,15 +903,30 @@ MC.renderHome = async function(fullRender) {
 
   // 加载存档数据
   try {
+    var result;
     if (MC.State.searchQuery) {
-      MC.State.archives = await MC.API.searchArchives(MC.State.searchQuery);
+      result = await MC.API.searchArchives(MC.State.searchQuery, MC.State.currentPage, MC.State.pageSize);
     } else {
-      MC.State.archives = await MC.API.listArchives({
+      result = await MC.API.listArchives({
         category: MC.State.activeCategory,
         mcVersion: MC.State.activeMcVersion,
         modLoader: MC.State.activeModLoader,
         sort: MC.State.sortMode,
+        page: MC.State.currentPage,
+        size: MC.State.pageSize,
       });
+    }
+    // 处理分页响应格式: { content, totalElements, totalPages, currentPage, size }
+    if (result && result.content !== undefined) {
+      MC.State.archives = result.content;
+      MC.State.totalPages = result.totalPages || 0;
+      MC.State.currentPage = result.currentPage || 0;
+      MC.State.totalElements = result.totalElements || 0;
+    } else {
+      // 兼容旧格式（数组直接返回）
+      MC.State.archives = Array.isArray(result) ? result : [];
+      MC.State.totalPages = 1;
+      MC.State.currentPage = 0;
     }
   } catch (e) {
     MC.State.archives = [];
@@ -681,7 +939,7 @@ MC.renderHome = async function(fullRender) {
     sidebar.innerHTML = `
       <div class="sidebar-item all-item ${MC.State.activeCategory === 'all' &&
         MC.State.activeMcVersion === 'all' && MC.State.activeModLoader === 'all' ? 'active' : ''}"
-        onclick="MC.State.activeCategory='all';MC.State.activeMcVersion='all';MC.State.activeModLoader='all';MC.renderHome(false)"
+        onclick="MC.State.activeCategory='all';MC.State.activeMcVersion='all';MC.State.activeModLoader='all';MC.State.currentPage=0;MC.renderHome(false)"
         role="button" tabindex="0">
         ✨ 展示全部
       </div>
@@ -700,7 +958,7 @@ MC.renderHome = async function(fullRender) {
   if (sortToggle) {
     sortToggle.innerHTML = MC.SORT_OPTIONS.map(s =>
       `<button class="sort-btn ${MC.State.sortMode === s.id ? 'active' : ''}"
-        onclick="MC.State.sortMode='${s.id}';MC.renderHome(false)">${s.label}</button>`
+        onclick="MC.State.sortMode='${s.id}';MC.State.currentPage=0;MC.renderHome(false)">${s.label}</button>`
     ).join('');
   }
 
@@ -720,6 +978,9 @@ MC.renderHome = async function(fullRender) {
       grid.innerHTML = MC.State.archives.map((a, i) => MC.UI.archiveCard(a, i)).join('');
     }
   }
+
+  // 渲染分页
+  MC.renderPagination();
 
   // 搜索模式下隐藏 hero
   if (MC.State.searchQuery && fullRender !== false) {
@@ -813,11 +1074,52 @@ MC.renderDetail = async function(id) {
         </div>
 
         <div class="detail-desc-section">
-          <div class="detail-desc">${MC.UI.esc(a.description || '暂无介绍')}</div>
+          <div class="detail-desc md-content">${MC.md(a.description || '暂无介绍')}</div>
         </div>
       </div>
     </div>
   </div>`;
+};
+
+// ================================================================
+// 作者主页
+// ================================================================
+MC.renderAuthorPage = async function() {
+  var authorId = MC.State.authorId;
+  var authorName = MC.State.authorName || '作者';
+  var main = document.getElementById('main-content');
+  main.innerHTML = '<div class="app-container" style="text-align:center;padding:80px"><p style="color:var(--c-text-tertiary)">加载中...</p></div>';
+
+  try {
+    var result = await MC.API.getArchivesByAuthor(authorId, MC.State.currentPage, MC.State.pageSize);
+    var archives = result.content || [];
+    MC.State.totalPages = result.totalPages || 0;
+  } catch (e) {
+    MC.Toast.show('加载失败: ' + e.message, 'error');
+    MC.navigate('home');
+    return;
+  }
+
+  main.innerHTML = '<div class="app-container">' +
+    '<div class="detail-back">' +
+      '<button class="btn btn-ghost btn-sm" onclick="MC.navigate(\'home\')">' +
+        '<svg width="14" height="14"><use href="#icon-arrow-left"/></svg>返回列表' +
+      '</button>' +
+    '</div>' +
+    '<div class="home-topbar">' +
+      '<h2 class="section-title">' + MC.UI.esc(authorName) + ' 的存档</h2>' +
+      '<span style="font-size:var(--fs-sm);color:var(--c-text-tertiary)">共 ' + (MC.State.totalElements || archives.length) + ' 个</span>' +
+    '</div>' +
+    '<div class="archive-grid" id="archive-grid">' +
+      (archives.length === 0
+        ? MC.UI.emptyState('📭', '暂无存档', '该作者还没有发布任何存档')
+        : archives.map(function(a, i) { return MC.UI.archiveCard(a, i); }).join('')
+      ) +
+    '</div>' +
+    '<div class="pagination" id="pagination"></div>' +
+  '</div>';
+
+  MC.renderPagination();
 };
 
 // ================================================================
@@ -834,9 +1136,10 @@ MC.renderProfile = async function() {
   // 刷新用户信息（获取最新 email 状态）
   try { MC.State.currentUser = await MC.API.checkAuth(); } catch {}
 
-  let myArchives = [], myBookmarks = [];
+  let myArchives = [], myBookmarks = [], myDownloads = [];
   try { myArchives = await MC.API.getMyArchives(); } catch {}
   try { myBookmarks = await MC.API.getMyBookmarks(); } catch {}
+  try { myDownloads = await MC.API.getMyDownloads(); } catch {}
 
   const u = MC.State.currentUser;
   const hasEmail = !!u.email;
@@ -946,6 +1249,18 @@ MC.renderProfile = async function() {
       ${myBookmarks.length === 0
         ? MC.UI.emptyState('⭐', '还没有收藏', '浏览存档时点击收藏按钮即可保存')
         : myBookmarks.map((a, i) => MC.UI.archiveCard(a, i)).join('')
+      }
+    </div>
+
+    <!-- 下载历史 -->
+    <div class="home-topbar" style="margin-top:40px">
+      <h2 class="section-title">下载历史</h2>
+      <span style="font-size:var(--fs-sm);color:var(--c-text-tertiary)">共 ${myDownloads.length} 个</span>
+    </div>
+    <div class="archive-grid" id="my-downloads-grid">
+      ${myDownloads.length === 0
+        ? MC.UI.emptyState('⬇️', '还没有下载记录', '浏览存档时点击下载即可记录')
+        : myDownloads.map((a, i) => MC.UI.archiveCard(a, i)).join('')
       }
     </div>
   </div>`;
@@ -1300,10 +1615,32 @@ MC.init = async function() {
   if (window.location.search.includes('verified=ok')) {
     MC.Toast.show('邮箱验证成功！现在可以登录了 🎉', 'success');
     // 清除 URL 参数
-    window.history.replaceState({}, '', '/');
+    window.history.replaceState({ page: 'home', data: null }, '', '/');
   }
 
-  MC.navigate('home');
+  // 通知轮询（每30秒检查一次）
+  if (MC.State.currentUser) {
+    MC.updateNotifBadge();
+    setInterval(MC.updateNotifBadge, 30000);
+  }
+
+  // 从 URL 解析初始路由状态
+  var route = MC._parseRoute();
+  MC.State.currentPage = route.page;
+  // 用 replaceState 确保初始状态可被 popstate 使用
+  var url = '/';
+  if (route.page === 'detail' && route.data) {
+    url = '/archive/' + route.data;
+  } else if (route.page === 'profile') {
+    url = '/profile';
+  }
+  history.replaceState({ page: route.page, data: route.data }, '', url);
+
+  document.querySelectorAll('.nav-link').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.nav === route.page);
+  });
+
+  MC.renderPage(route.data);
 };
 
 // 启动应用

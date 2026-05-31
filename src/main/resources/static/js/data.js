@@ -62,6 +62,11 @@ MC.State = {
   // 数据缓存
   archives: [],
   archiveDetail: null,
+  totalElements: 0,
+
+  // 作者页
+  authorId: null,
+  authorName: '',
 
   // 动态元数据（从后端获取）
   meta: { categories: [], mcVersions: [], modLoaders: [] },

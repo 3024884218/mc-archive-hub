@@ -91,13 +91,27 @@ MC.API = {
   async listArchives(filters = {}) {
     const p = new URLSearchParams();
     Object.entries(filters).forEach(([k,v]) => { if (v && v !== 'all') p.set(k, v); });
+    // 默认分页参数
+    if (!p.has('page')) p.set('page', filters.page !== undefined ? filters.page : 0);
+    if (!p.has('size')) p.set('size', filters.size !== undefined ? filters.size : 12);
     return this._fetch('/api/archives' + (p.toString() ? '?' + p : ''));
   },
   async getMetadata() { return this._fetch('/api/archives/metadata'); },
-  async searchArchives(q)   {
-    if (!q || !q.trim()) return this.listArchives({});
-    return this._fetch('/api/archives/search?q=' + encodeURIComponent(q.trim()));
+  async searchArchives(q, page, size)   {
+    if (!q || !q.trim()) return this.listArchives({ page: page || 0, size: size || 12 });
+    var url = '/api/archives/search?q=' + encodeURIComponent(q.trim());
+    if (page !== undefined) url += '&page=' + page;
+    if (size !== undefined) url += '&size=' + size;
+    return this._fetch(url);
   },
+  async getArchivesByAuthor(authorId, page, size) {
+    var url = '/api/archives/author/' + authorId;
+    var sep = '?';
+    if (page !== undefined) { url += sep + 'page=' + page; sep = '&'; }
+    if (size !== undefined) { url += sep + 'size=' + size; sep = '&'; }
+    return this._fetch(url);
+  },
+  async getRelatedArchives(id) { return this._fetch('/api/archives/' + id + '/related'); },
   async getArchive(id)      { return this._fetch('/api/archives/' + id); },
   async createArchive(fd)   {
     return this._fetch('/api/archives', { method:'POST', body:fd });
@@ -110,4 +124,8 @@ MC.API = {
   async deleteComment(commentId) { return this._fetch('/api/comments/' + commentId, { method:'DELETE' }); },
   async getMyArchives()     { return this._fetch('/api/archives/my/list'); },
   async getMyBookmarks()    { return this._fetch('/api/archives/my/bookmarks'); },
+  async getMyDownloads()    { return this._fetch('/api/archives/my/downloads'); },
+  async getUnreadNotifCount() { return this._fetch('/api/archives/notifications/unread-count'); },
+  async getNotifications()    { return this._fetch('/api/archives/notifications'); },
+  async markNotifsRead()      { return this._fetch('/api/archives/notifications/read-all', { method:'POST' }); },
 };

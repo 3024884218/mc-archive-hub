@@ -71,7 +71,7 @@ MC.UI = {
     // 动画延迟
     const animDelay = (index || 0) * 0.05;
 
-    return `<article class="archive-card" onclick="MC.navigate('detail',${a.id})" style="animation-delay:${animDelay}s">
+    return `<article class="archive-card" data-id="${a.id}" onclick="MC.navigate('detail',${a.id})" style="animation-delay:${animDelay}s">
       ${imgPart}
       <div class="card-body">
         <div class="card-tags">
@@ -83,10 +83,14 @@ MC.UI = {
         <p class="card-desc">${this.esc((a.description || '').substring(0, 120))}</p>
         <div class="card-footer">
           <div class="card-author">
-            <div class="card-author-avatar">${this.esc((a.authorName || '?')[0])}</div>
-            <span class="card-author-name">${this.esc(a.authorName || '匿名')}</span>
+            <div class="card-author-avatar" onclick="event.stopPropagation();MC.navigateAuthor('${a.authorId || ''}','${this.esc(a.authorName || '匿名')}')" title="查看作者主页">${this.esc((a.authorName || '?')[0])}</div>
+            <a class="card-author-name" href="#" onclick="event.stopPropagation();MC.navigateAuthor('${a.authorId || ''}','${this.esc(a.authorName || '匿名')}')" title="查看作者所有存档">${this.esc(a.authorName || '匿名')}</a>
           </div>
           <div class="card-actions">
+            <span class="card-dl-count" title="下载次数">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              ${a.downloadCount || 0}
+            </span>
             <button class="card-action-btn ${a.liked ? 'liked' : ''}"
               onclick="MC.handleLike(${a.id},event)" title="点赞" aria-label="点赞">
               <svg><use href="#icon-heart"/></svg>
@@ -126,7 +130,7 @@ MC.UI = {
       const name = Array.isArray(it) ? it[1] || id : it.name || id;
       const count = Array.isArray(it) ? it[2] : it.count;
       return `<div class="sidebar-item ${active === id ? 'active' : ''}"
-          onclick="MC.State.${stateKey}='${id}';MC.renderHome(false)"
+          onclick="MC.State.${stateKey}='${id}';MC.State.currentPage=0;MC.renderHome(false)"
           role="button" tabindex="0"
           aria-pressed="${active === id}">
         <span>${name}</span>

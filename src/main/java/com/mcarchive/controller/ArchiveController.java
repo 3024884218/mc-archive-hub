@@ -17,6 +17,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.data.domain.Page;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -54,10 +56,13 @@ public class ArchiveController {
         return ResponseEntity.ok(Map.of("message", "发布成功", "archive", archiveToMap(archive)));
     }
 
-    /** 全文搜索 */
+    /** 全文搜索（支持分页） */
     @GetMapping("/search")
-    public ResponseEntity<?> searchArchives(@RequestParam("q") String q) {
-        List<Archive> archives = archiveService.searchArchives(q);
+    public ResponseEntity<?> searchArchives(
+            @RequestParam("q") String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        Page<Archive> paged = archiveService.searchArchivesPaged(q, page, size);
         CustomUserDetails details = currentUser.getDetails();
 
         Set<Long> likedIds = details != null
@@ -65,9 +70,17 @@ public class ArchiveController {
         Set<Long> bmIds = details != null
             ? new HashSet<>(archiveService.getBookmarkedArchiveIds(details.getUser())) : Set.of();
 
-        return ResponseEntity.ok(archives.stream()
+        List<Map<String, Object>> items = paged.getContent().stream()
             .map(a -> archiveToMap(a, likedIds.contains(a.getId()), bmIds.contains(a.getId())))
-            .toList());
+            .toList();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("content", items);
+        result.put("totalElements", paged.getTotalElements());
+        result.put("totalPages", paged.getTotalPages());
+        result.put("currentPage", paged.getNumber());
+        result.put("size", paged.getSize());
+        return ResponseEntity.ok(result);
     }
 
     /** 元数据 — 现有存档的动态分类/版本/加载器 */
@@ -76,16 +89,18 @@ public class ArchiveController {
         return ResponseEntity.ok(archiveService.getMetadata());
     }
 
-    /** 存档列表（支持筛选） */
+    /** 存档列表（支持筛选 + 分页） */
     @GetMapping
     public ResponseEntity<?> listArchives(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String mcVersion,
             @RequestParam(required = false) String modLoader,
-            @RequestParam(defaultValue = "popular") String sort) {
+            @RequestParam(defaultValue = "popular") String sort,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
 
-        boolean sortPopular = !"newest".equals(sort);
-        List<Archive> archives = archiveService.getArchivesByFilters(category, mcVersion, modLoader, sortPopular);
+        Page<Archive> paged = archiveService.getArchivesByFiltersPaged(
+            category, mcVersion, modLoader, sort, page, size);
         CustomUserDetails details = currentUser.getDetails();
 
         Set<Long> likedIds = details != null
@@ -95,9 +110,17 @@ public class ArchiveController {
             ? new HashSet<>(archiveService.getBookmarkedArchiveIds(details.getUser()))
             : Set.of();
 
-        return ResponseEntity.ok(archives.stream()
+        List<Map<String, Object>> items = paged.getContent().stream()
             .map(a -> archiveToMap(a, likedIds.contains(a.getId()), bmIds.contains(a.getId())))
-            .toList());
+            .toList();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("content", items);
+        result.put("totalElements", paged.getTotalElements());
+        result.put("totalPages", paged.getTotalPages());
+        result.put("currentPage", paged.getNumber());
+        result.put("size", paged.getSize());
+        return ResponseEntity.ok(result);
     }
 
     /** 存档详情 */
@@ -172,6 +195,12 @@ public class ArchiveController {
             return ResponseEntity.notFound().build();
 
         archiveService.incrementDownloadCount(id);
+        // 记录下载历史
+        CustomUserDetails details = currentUser.getDetails();
+        if (details != null) {
+            archiveService.recordDownload(details.getUser().getId(), id);
+        }
+
         Resource resource = new FileSystemResource(uploadRoot.resolve(archive.getFilePath()));
         if (!resource.exists()) return ResponseEntity.notFound().build();
 
@@ -186,6 +215,45 @@ public class ArchiveController {
             .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
             .contentType(MediaType.APPLICATION_OCTET_STREAM)
             .body(resource);
+    }
+
+    /** 查看某作者的存档（分页） */
+    @GetMapping("/author/{authorId}")
+    public ResponseEntity<?> getArchivesByAuthor(
+            @PathVariable Long authorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        Page<Archive> paged = archiveService.getArchivesByAuthorPaged(authorId, page, size);
+        CustomUserDetails details = currentUser.getDetails();
+
+        Set<Long> likedIds = details != null
+            ? new HashSet<>(archiveService.getLikedArchiveIds(details.getUser())) : Set.of();
+        Set<Long> bmIds = details != null
+            ? new HashSet<>(archiveService.getBookmarkedArchiveIds(details.getUser())) : Set.of();
+
+        List<Map<String, Object>> items = paged.getContent().stream()
+            .map(a -> archiveToMap(a, likedIds.contains(a.getId()), bmIds.contains(a.getId())))
+            .toList();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("content", items);
+        result.put("totalElements", paged.getTotalElements());
+        result.put("totalPages", paged.getTotalPages());
+        result.put("currentPage", paged.getNumber());
+        result.put("size", paged.getSize());
+        return ResponseEntity.ok(result);
+    }
+
+    /** 我的下载历史 */
+    @GetMapping("/my/downloads")
+    public ResponseEntity<?> getMyDownloads() {
+        User user = requireAuth();
+        var archives = archiveService.getDownloadedArchives(user.getId());
+        return ResponseEntity.ok(archives.stream()
+            .map(a -> archiveToMap(a,
+                archiveService.isLiked(user, a.getId()),
+                archiveService.isBookmarked(user, a.getId())))
+            .toList());
     }
 
     /** 我的存档 */
@@ -247,6 +315,40 @@ public class ArchiveController {
         }
     }
 
+    /** 获取未读通知数 */
+    @GetMapping("/notifications/unread-count")
+    public ResponseEntity<?> getUnreadNotificationCount() {
+        User user = requireAuth();
+        long count = archiveService.getUnreadNotificationCount(user.getId());
+        return ResponseEntity.ok(Map.of("count", count));
+    }
+
+    /** 获取通知列表 */
+    @GetMapping("/notifications")
+    public ResponseEntity<?> getNotifications() {
+        User user = requireAuth();
+        var notifications = archiveService.getNotifications(user.getId());
+        return ResponseEntity.ok(notifications.stream().map(n -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", n.getId());
+            m.put("type", n.getType());
+            m.put("archiveId", n.getArchiveId());
+            m.put("actorName", n.getActorName());
+            m.put("archiveTitle", n.getArchiveTitle());
+            m.put("read", n.isRead());
+            m.put("createdAt", n.getCreatedAt().toString());
+            return m;
+        }).toList());
+    }
+
+    /** 标记所有通知为已读 */
+    @PostMapping("/notifications/read-all")
+    public ResponseEntity<?> markAllNotificationsRead() {
+        User user = requireAuth();
+        archiveService.markAllNotificationsRead(user.getId());
+        return ResponseEntity.ok(Map.of("message", "ok"));
+    }
+
     /** 删除评论 */
     @DeleteMapping("/comments/{commentId}")
     public ResponseEntity<?> deleteComment(@PathVariable Long commentId) {
@@ -301,6 +403,7 @@ public class ArchiveController {
         }
         map.put("images", imgs);
         map.put("hasFile", a.getFilePath() != null && !a.getFilePath().isEmpty());
+        map.put("fileSize", a.getFileSize());
         return map;
     }
 
