@@ -332,11 +332,12 @@ MC.renderDetail = async function(id) {
             '<input class="comment-input" id="comment-input" type="text" placeholder="发表评论..." maxlength="2000" onkeydown="if(event.key===\'Enter\')MC.handleAddComment(' + a.id + ')">' +
             '<button class="comment-submit" id="comment-submit" onclick="MC.handleAddComment(' + a.id + ')">发送</button>' +
             '</div>'
-	      info.appendChild(sec);
-	    }).catch(function(){});
+          : '<p style="font-size:var(--fs-sm);color:var(--c-text-tertiary);text-align:center;margin-top:var(--sp-3)"><a href="#" onclick="MC.openAuthModal(\'login\')" style="color:var(--c-primary)">登录</a>后即可评论</p>');
+      info.appendChild(sec);
+    }).catch(function(){});
 
-	    // 加载相关推荐
-	    MC.API.getRelatedArchives(a.id).then(function(related) {
+    // 加载相关存档
+    MC.API._fetch('/api/archives/' + a.id + '/related').then(function(related) {
 	      if (!related || related.length === 0) return;
 	      var info2 = document.querySelector('.detail-info');
 	      if (!info2) return;
