@@ -191,38 +191,6 @@ MC.openSponsorModal = function(wxUrl, zfbUrl, authorName) {
 // ================================================================
 MC.updateNotifBadge = function() {};
 MC.openNotifications = function() {};
-    MC.updateNotifBadge();
-
-    var content = document.getElementById('auth-modal-content');
-    content.innerHTML = '<div class="modal-header">' +
-      '<h2 class="modal-title">🔔 通知</h2>' +
-      '<button class="modal-close" onclick="MC.Modal.close(\'auth-modal\')" aria-label="关闭">&times;</button>' +
-      '</div>' +
-      '<div class="modal-body">' +
-      (notifs.length === 0
-        ? '<p style="text-align:center;color:var(--c-text-tertiary);padding:var(--sp-6)">暂无通知</p>'
-        : notifs.map(function(n) {
-            var icon = n.type === 'comment' ? '💬' : '❤️';
-            var text = n.type === 'comment'
-              ? '<strong>' + MC.UI.esc(n.actorName) + '</strong> 评论了你的存档 <strong>' + MC.UI.esc(n.archiveTitle) + '</strong>'
-              : '<strong>' + MC.UI.esc(n.actorName) + '</strong> 点赞了你的存档 <strong>' + MC.UI.esc(n.archiveTitle) + '</strong>';
-            return '<div class="notif-item' + (!n.read ? ' unread' : '') + '" onclick="MC.Modal.close(\'auth-modal\');MC.navigate(\'detail\',' + n.archiveId + ')" style="cursor:pointer;padding:12px;border-bottom:1px solid var(--c-border-light);transition:background var(--t-fast)">' +
-              '<div style="display:flex;align-items:flex-start;gap:10px">' +
-              '<span style="font-size:20px">' + icon + '</span>' +
-              '<div style="flex:1;min-width:0">' +
-              '<div style="font-size:var(--fs-sm);line-height:1.4">' + text + '</div>' +
-              '<div style="font-size:var(--fs-xs);color:var(--c-text-tertiary);margin-top:4px">' + MC.UI.fmtDate(n.createdAt) + '</div>' +
-              '</div>' +
-              (!n.read ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--c-primary);flex-shrink:0;margin-top:6px"></span>' : '') +
-              '</div></div>';
-          }).join('')
-      ) +
-      '</div>';
-    MC.Modal.open('auth-modal');
-  } catch (e) {
-    MC.Toast.show('加载通知失败', 'error');
-  }
-};
 
 // ================================================================
 // 认证弹窗
@@ -750,7 +718,7 @@ MC._parseRoute = function() {
   if (authorMatch) {
     var id = parseInt(authorMatch[1]);
     MC.State.authorId = id;
-    MC.State.currentPage = 0;
+    MC.State.pageNum = 0;
     return { page: 'author', data: { id: id } };
   }
   return { page: 'home', data: null };
@@ -788,7 +756,7 @@ MC.navigateAuthor = function(authorId, authorName) {
   MC.State.authorId = authorId;
   MC.State.authorName = authorName;
   MC.State.searchQuery = '';
-  MC.State.currentPage = 0;
+  MC.State.pageNum = 0;
   var inp = document.getElementById('search-input');
   if (inp) inp.value = '';
   var clearBtn = document.getElementById('search-clear');
@@ -806,7 +774,7 @@ MC.navigateAuthor = function(authorId, authorName) {
 MC.doSearch = function() {
   const q = document.getElementById('search-input').value.trim();
   MC.State.searchQuery = q;
-  MC.State.currentPage = 0;
+  MC.State.pageNum = 0;
   document.getElementById('search-clear').classList.toggle('hidden', !q);
 
   if (q) {
@@ -861,7 +829,7 @@ MC.renderHome = async function(fullRender) {
               <div class="sort-toggle" id="sort-toggle">
                 ${MC.SORT_OPTIONS.map(s =>
                   `<button class="sort-btn ${MC.State.sortMode === s.id ? 'active' : ''}"
-                    onclick="MC.State.sortMode='${s.id}';MC.State.currentPage=0;MC.renderHome(false)">${s.label}</button>`
+                    onclick="MC.State.sortMode='${s.id}';MC.State.pageNum=0;MC.renderHome(false)">${s.label}</button>`
                 ).join('')}
               </div>
             </div>
@@ -883,14 +851,14 @@ MC.renderHome = async function(fullRender) {
   try {
     var result;
     if (MC.State.searchQuery) {
-      result = await MC.API.searchArchives(MC.State.searchQuery, MC.State.currentPage, MC.State.pageSize);
+      result = await MC.API.searchArchives(MC.State.searchQuery, MC.State.pageNum || 0, MC.State.pageSize);
     } else {
       result = await MC.API.listArchives({
         category: MC.State.activeCategory,
         mcVersion: MC.State.activeMcVersion,
         modLoader: MC.State.activeModLoader,
         sort: MC.State.sortMode,
-        page: MC.State.currentPage,
+        page: MC.State.pageNum || 0,
         size: MC.State.pageSize,
       });
     }
@@ -898,13 +866,13 @@ MC.renderHome = async function(fullRender) {
     if (result && result.content !== undefined) {
       MC.State.archives = result.content;
       MC.State.totalPages = result.totalPages || 0;
-      MC.State.currentPage = result.currentPage || 0;
+      MC.State.pageNum = result.currentPage || 0;
       MC.State.totalElements = result.totalElements || 0;
     } else {
       // 兼容旧格式（数组直接返回）
       MC.State.archives = Array.isArray(result) ? result : [];
       MC.State.totalPages = 1;
-      MC.State.currentPage = 0;
+      MC.State.pageNum = 0;
     }
   } catch (e) {
     MC.State.archives = [];
@@ -917,7 +885,7 @@ MC.renderHome = async function(fullRender) {
     sidebar.innerHTML = `
       <div class="sidebar-item all-item ${MC.State.activeCategory === 'all' &&
         MC.State.activeMcVersion === 'all' && MC.State.activeModLoader === 'all' ? 'active' : ''}"
-        onclick="MC.State.activeCategory='all';MC.State.activeMcVersion='all';MC.State.activeModLoader='all';MC.State.currentPage=0;MC.renderHome(false)"
+        onclick="MC.State.activeCategory='all';MC.State.activeMcVersion='all';MC.State.activeModLoader='all';MC.State.pageNum=0;MC.renderHome(false)"
         role="button" tabindex="0">
         ✨ 展示全部
       </div>
@@ -936,7 +904,7 @@ MC.renderHome = async function(fullRender) {
   if (sortToggle) {
     sortToggle.innerHTML = MC.SORT_OPTIONS.map(s =>
       `<button class="sort-btn ${MC.State.sortMode === s.id ? 'active' : ''}"
-        onclick="MC.State.sortMode='${s.id}';MC.State.currentPage=0;MC.renderHome(false)">${s.label}</button>`
+        onclick="MC.State.sortMode='${s.id}';MC.State.pageNum=0;MC.renderHome(false)">${s.label}</button>`
     ).join('');
   }
 
@@ -1069,7 +1037,7 @@ MC.renderAuthorPage = async function() {
   main.innerHTML = '<div class="app-container" style="text-align:center;padding:80px"><p style="color:var(--c-text-tertiary)">加载中...</p></div>';
 
   try {
-    var result = await MC.API.getArchivesByAuthor(authorId, MC.State.currentPage, MC.State.pageSize);
+    var result = await MC.API.getArchivesByAuthor(authorId, MC.State.pageNum || 0, MC.State.pageSize);
     var archives = result.content || [];
     MC.State.totalPages = result.totalPages || 0;
   } catch (e) {
@@ -1588,6 +1556,9 @@ MC.init = async function() {
   } catch {}
 
   MC.UI.updateHeader();
+
+  // 确保分页页码从 0 开始
+  MC.State.pageNum = 0;
 
   // 邮箱验证成功跳转回来，显示提示
   if (window.location.search.includes('verified=ok')) {

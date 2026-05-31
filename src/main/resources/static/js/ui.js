@@ -130,7 +130,7 @@ MC.UI = {
       const name = Array.isArray(it) ? it[1] || id : it.name || id;
       const count = Array.isArray(it) ? it[2] : it.count;
       return `<div class="sidebar-item ${active === id ? 'active' : ''}"
-          onclick="MC.State.${stateKey}='${id}';MC.State.currentPage=0;MC.renderHome(false)"
+          onclick="MC.State.${stateKey}='${id}';MC.State.pageNum=0;MC.renderHome(false)"
           role="button" tabindex="0"
           aria-pressed="${active === id}">
         <span>${name}</span>

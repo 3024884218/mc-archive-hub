@@ -18,7 +18,7 @@ MC.renderPagination = function() {
   var el = document.getElementById('pagination');
   if (!el) return;
   var total = MC.State.totalPages;
-  var cur = MC.State.currentPage;
+  var cur = MC.State.pageNum || 0;
   if (total <= 1) { el.innerHTML = ''; return; }
   var html = '';
   html += '<button class="pagination-btn" ' + (cur===0?'disabled':'') + ' onclick="MC.goPage('+(cur-1)+')">◀</button>';
@@ -30,7 +30,7 @@ MC.renderPagination = function() {
 };
 
 MC.goPage = function(page) {
-  MC.State.currentPage = Math.max(0, Math.min(page, Math.max(0, MC.State.totalPages - 1)));
+  MC.State.pageNum = Math.max(0, Math.min(page, Math.max(0, MC.State.totalPages - 1)));
   MC.renderHome(false);
   // 滚动到顶部
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -145,7 +145,7 @@ MC.deleteArchive = function(id, evt) {
   if (!confirm('确定要删除这个存档吗？此操作不可撤销！')) return;
   MC.API._fetch('/api/archives/' + id, { method: 'DELETE' }).then(function() {
     MC.Toast.show('存档已删除', 'success');
-    MC.State.currentPage = 0;
+    MC.State.pageNum = 0;
     MC.renderHome(true);
   }).catch(function(e) {
     MC.Toast.show(e.message, 'error');

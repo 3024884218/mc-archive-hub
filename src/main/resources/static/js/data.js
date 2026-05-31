@@ -75,7 +75,7 @@ MC.State = {
   loading: false,
   darkMode: false,
   viewMode: 'card',      // 'card' | 'list'
-  currentPage: 0,
+  pageNum: 0,            // 分页页码（与路由 currentPage 分离，避免类型冲突）
   totalPages: 0,
   pageSize: 12,
 
