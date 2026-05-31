@@ -187,32 +187,10 @@ MC.openSponsorModal = function(wxUrl, zfbUrl, authorName) {
 };
 
 // ================================================================
-// 通知系统
+// 通知系统（后端待实现，前端暂时禁用）
 // ================================================================
-MC.updateNotifBadge = async function() {
-  if (!MC.State.currentUser) return;
-  var bell = document.getElementById('notification-bell');
-  if (!bell) return;
-  try {
-    var r = await MC.API.getUnreadNotifCount();
-    var count = r.count || 0;
-    bell.style.display = '';
-    var badge = document.getElementById('notif-badge');
-    if (badge) {
-      badge.textContent = count > 99 ? '99+' : count;
-      badge.classList.toggle('hidden', count === 0);
-    }
-  } catch (e) {
-    // 静默失败
-  }
-};
-
-MC.openNotifications = async function() {
-  if (!MC.State.currentUser) return;
-  try {
-    var notifs = await MC.API.getNotifications();
-    // 标记全部已读
-    MC.API.markNotifsRead().catch(function(){});
+MC.updateNotifBadge = function() {};
+MC.openNotifications = function() {};
     MC.updateNotifBadge();
 
     var content = document.getElementById('auth-modal-content');

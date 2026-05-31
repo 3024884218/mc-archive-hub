@@ -124,8 +124,4 @@ MC.API = {
   async deleteComment(commentId) { return this._fetch('/api/comments/' + commentId, { method:'DELETE' }); },
   async getMyArchives()     { return this._fetch('/api/archives/my/list'); },
   async getMyBookmarks()    { return this._fetch('/api/archives/my/bookmarks'); },
-  async getMyDownloads()    { return this._fetch('/api/archives/my/downloads'); },
-  async getUnreadNotifCount() { return this._fetch('/api/archives/notifications/unread-count'); },
-  async getNotifications()    { return this._fetch('/api/archives/notifications'); },
-  async markNotifsRead()      { return this._fetch('/api/archives/notifications/read-all', { method:'POST' }); },
 };
