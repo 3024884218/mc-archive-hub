@@ -222,9 +222,7 @@ public class AuthController {
      * 调用 changeSessionId() 防止会话固定攻击
      */
     private void autoLogin(HttpServletRequest request, User user) {
-        // 先创建 Session，再更换 ID 防止会话固定攻击
         HttpSession session = request.getSession(true);
-        request.changeSessionId();
 
         CustomUserDetails details = new CustomUserDetails(user);
         UsernamePasswordAuthenticationToken auth =
