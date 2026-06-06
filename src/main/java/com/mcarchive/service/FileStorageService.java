@@ -39,6 +39,12 @@ public class FileStorageService {
     /** 图片最大大小：10MB */
     private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
+    /** 允许的 Mod 扩展名 */
+    private static final Set<String> ALLOWED_MOD_EXTENSIONS = Set.of(".jar", ".zip");
+
+    /** Mod 文件最大大小：50MB */
+    private static final long MAX_MOD_SIZE = 50 * 1024 * 1024;
+
     private final Path uploadRoot;
 
     public FileStorageService(@Value("${app.upload.dir}") String uploadDir) {
@@ -117,6 +123,41 @@ public class FileStorageService {
 
         log.debug("图片已存储: archiveId={}, fileName={}", archiveId, fileName);
         return "archives/" + archiveId + "/images/" + fileName;
+    }
+
+    /**
+     * 存储 Mod 文件
+     * @param archiveId 存档ID
+     * @param file 上传的 Mod 文件
+     * @param index modsJson 数组中的索引
+     * @return 相对路径
+     */
+    public String storeModFile(Long archiveId, MultipartFile file, int index) throws IOException {
+        if (file == null || file.isEmpty()) return null;
+
+        String originalName = file.getOriginalFilename();
+        String extension = extractExtension(originalName);
+        if (!ALLOWED_MOD_EXTENSIONS.contains(extension.toLowerCase())) {
+            throw new IllegalArgumentException("不支持的 Mod 格式: " + extension + "，仅支持 .jar / .zip");
+        }
+        if (file.getSize() > MAX_MOD_SIZE) {
+            throw new IllegalArgumentException("Mod 文件不能超过 50MB");
+        }
+
+        Path archiveDir = getArchiveDir(archiveId);
+        Files.createDirectories(archiveDir);
+
+        String safeName = "mod_" + index + "_" + sanitizeName(originalName);
+        Path targetPath = archiveDir.resolve(safeName);
+        Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+        log.info("Mod 文件已存储: archiveId={}, index={}, path={}", archiveId, index, targetPath);
+        return "archives/" + archiveId + "/" + safeName;
+    }
+
+    private String sanitizeName(String name) {
+        if (name == null) return "unknown";
+        return name.replaceAll("[^a-zA-Z0-9.\\-_\\u4e00-\\u9fff]", "_");
     }
 
     /**

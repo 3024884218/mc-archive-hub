@@ -25,6 +25,8 @@ public class EmailService {
     private final String baseUrl;
     private final boolean emailConfigured;
 
+    public boolean isEmailConfigured() { return emailConfigured; }
+
     public EmailService(JavaMailSender mailSender,
                         @Value("${spring.mail.username}") String from,
                         @Value("${app.base-url:http://localhost:8080}") String baseUrl) {

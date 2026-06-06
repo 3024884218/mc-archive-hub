@@ -1,5 +1,5 @@
 /**
- * MC Archive Hub v2 — 增强补丁
+ * MC Archive Hub v3 · 增强补丁
  * 分页 / 编辑删除 / 进度条 / 拖拽 / Markdown / 相关推荐 / 视图切换
  */
 (function() {
@@ -170,10 +170,25 @@ MC.openEditArchiveModal = function(id) {
       Object.entries(MC.LOADER_LABELS).map(function(e) { return '<option value="' + e[0] + '" ' + (a.modLoader === e[0] ? 'selected' : '') + '>' + MC.UI.loaderIcon(e[0]) + ' ' + e[1] + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="form-group"><label class="form-label">存档介绍 *</label><textarea class="form-textarea" id="up-desc" maxlength="2000">' + MC.UI.esc(a.description) + '</textarea></div>' +
+    '<div class="form-group"><label class="form-label">外部下载链接 <span style="font-weight:normal;color:var(--c-text-tertiary)">（推荐）</span></label><input class="form-input" id="up-download-url" type="url" value="' + MC.UI.esc(a.downloadUrl || '') + '" placeholder="如网盘链接"></div>' +
+    '<div class="form-group"><label class="form-label">所需 Mod <span style="font-weight:normal;color:var(--c-text-tertiary)">（可选）</span></label>' +
+      '<div id="mods-container">' +
+        '<div class="mod-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">' +
+          '<input class="form-input" type="text" placeholder="Mod 名称" style="flex:2">' +
+          '<input class="form-input" type="url" placeholder="下载链接（可选）" style="flex:2">' +
+          '<input type="file" accept=".jar,.zip" style="display:none" class="mod-file-input">' +
+          '<button class="btn btn-ghost btn-sm mod-file-btn" style="flex-shrink:0;font-size:18px" title="上传 Mod 文件 (jar/zip)">📦</button>' +
+          '<button class="btn btn-ghost btn-sm mod-del-btn" disabled style="flex-shrink:0">✕</button>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn btn-ghost btn-sm" style="margin-top:6px" id="add-mod-btn">+ 添加 Mod</button>' +
+    '</div>' +
     '<div class="form-error" id="up-error"><span class="form-error-icon">⚠️</span><span id="up-error-msg"></span></div>' +
     '<button class="btn btn-primary" style="width:100%;justify-content:center" id="up-submit">保存修改</button>' +
     '</div>';
   MC.Modal.open('upload-modal');
+  // 初始化 Mod 构建器（填入已有数据）
+  MC.initModBuilder(a.modsJson);
   document.getElementById('up-submit').onclick = function() {
     MC.handleEditArchive(id);
   };
@@ -191,6 +206,15 @@ MC.handleEditArchive = async function(id) {
   fd.append('title', t); fd.append('category', document.getElementById('up-cat').value);
   fd.append('mcVersion', document.getElementById('up-ver').value); fd.append('modLoader', document.getElementById('up-loader').value);
   fd.append('description', d);
+  var modData = MC.gatherModFiles();
+  if (modData.modsJson !== '[]') fd.append('modsJson', modData.modsJson);
+  else fd.append('modsJson', '');
+  modData.modFiles.forEach(function(f) {
+    if (f) fd.append('modFiles', f);
+  });
+  var downloadUrl = (document.getElementById('up-download-url') || {}).value || '';
+  if (downloadUrl.trim()) fd.append('downloadUrl', downloadUrl.trim());
+  else fd.append('downloadUrl', '');
   try {
     await MC.API._fetch('/api/archives/' + id, { method: 'PUT', body: fd });
     MC.Modal.close('upload-modal');
@@ -251,6 +275,17 @@ MC.renderDetail = async function(id) {
         ')">' +
         '<svg><use href="#icon-coin"/></svg>为作者充电</button>'
       );
+    }
+
+    // 外部下载链接（网盘等）
+    if (a.downloadUrl) {
+      var actionsDL = document.querySelector('.detail-actions');
+      if (actionsDL) {
+        actionsDL.insertAdjacentHTML('beforeend',
+          '<a href="' + MC.UI.esc(a.downloadUrl) + '" target="_blank" rel="noopener" class="btn btn-accent">' +
+          '<svg width="16" height="16"><use href="#icon-download"/></svg> 外部下载</a>'
+        );
+      }
     }
 
     // 踩按钮

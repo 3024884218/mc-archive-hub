@@ -87,17 +87,27 @@ public class AuthController {
 
         User user = userService.register(username.trim(), password, email);
 
-        // 发送验证邮件
-        try {
-            emailService.sendVerificationEmail(email, user.getUsername(),
-                user.getEmailVerificationToken());
-        } catch (Exception e) {
-            log.warn("验证邮件发送失败: {}", e.getMessage());
+        // 如果 SMTP 未配置，自动验证邮箱；否则发送验证邮件
+        if (emailService.isEmailConfigured()) {
+            try {
+                emailService.sendVerificationEmail(email, user.getUsername(),
+                    user.getEmailVerificationToken());
+            } catch (Exception e) {
+                log.warn("验证邮件发送失败: {}", e.getMessage());
+            }
+        } else {
+            user.setEmailVerified(true);
+            user.setEmailVerificationToken(null);
+            userService.save(user);
         }
 
-        // 不自动登录，引导用户去邮箱验证
+        // 消息文案根据 SMTP 状态动态切换
+        String msg = emailService.isEmailConfigured()
+            ? "注册成功！验证邮件已发送至 " + email + "，请查收后点击验证链接完成激活"
+            : "注册成功！邮件服务未配置，账号已自动激活，可直接登录";
+
         return ResponseEntity.ok(Map.of(
-            "message", "注册成功！验证邮件已发送至 " + email + "，请查收后点击验证链接完成激活",
+            "message", msg,
             "needVerify", true
         ));
     }
@@ -132,8 +142,8 @@ public class AuthController {
             return ResponseEntity.status(401).body(Map.of("error", "用户名或密码错误"));
         }
 
-        // 邮箱未验证则拒绝
-        if (user.getEmail() != null && !user.isEmailVerified()) {
+        // 邮箱未验证则拒绝（仅当邮件服务已配置时）
+        if (emailService.isEmailConfigured() && user.getEmail() != null && !user.isEmailVerified()) {
             return ResponseEntity.status(403).body(Map.of(
                 "error", "邮箱尚未验证，请查收验证邮件并点击链接激活账号",
                 "needVerify", true,

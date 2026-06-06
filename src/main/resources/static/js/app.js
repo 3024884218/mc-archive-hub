@@ -1,5 +1,5 @@
 /**
- * MC Archive Hub v2 — App 控制器
+ * MC Archive Hub v3 · App 控制器
  * 路由分发、状态变更、事件处理、主题管理
  * 依赖: api.js, data.js, ui.js 先于本文件加载
  */
@@ -278,7 +278,8 @@ MC.openAuthModal = function(mode) {
     if (!u) return setErr('请输入用户名', 'auth-username');
     if (u.length > 30) return setErr('用户名最多 30 个字符', 'auth-username');
     if (!p) return setErr('请输入密码', 'auth-password');
-    if (p.length < 8) return setErr('密码至少 8 位', 'auth-password');
+    // 注册时需要密码长度校验，登录时不校验
+    if (!isLogin && p.length < 8) return setErr('密码至少 8 位', 'auth-password');
     let email = '';
     if (!isLogin) {
       const p2El = document.getElementById('auth-password2');
@@ -419,6 +420,20 @@ MC.openUploadModal = function() {
         </div>
       </div>
       <div class="form-group">
+        <label class="form-label">所需 Mod <span style="font-weight:normal;color:var(--c-text-tertiary)">（可选，附上名称和下载链接方便玩家安装）</span></label>
+        <div id="mods-container">
+          <div class="mod-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+            <input class="form-input" type="text" placeholder="Mod 名称，如 Fabric API" style="flex:2">
+            <input class="form-input" type="url" placeholder="下载链接（可选）" style="flex:2">
+            <input type="file" accept=".jar,.zip" style="display:none" class="mod-file-input">
+            <button class="btn btn-ghost btn-sm mod-file-btn" style="flex-shrink:0;font-size:18px" title="上传 Mod 文件 (jar/zip)">📦</button>
+            <button class="btn btn-ghost btn-sm mod-del-btn" disabled style="flex-shrink:0">✕</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" id="add-mod-btn">+ 添加 Mod</button>
+        <div class="form-hint">填写玩家运行此存档所需要的 Mod，方便下载者快速安装</div>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="up-desc">存档介绍 *</label>
         <textarea class="form-textarea" id="up-desc"
           placeholder="描述你的存档内容、特色、适用版本等..."
@@ -430,6 +445,11 @@ MC.openUploadModal = function() {
         <input type="file" id="up-file" accept=".zip,.rar,.7z"
           style="font-size:14px">
         <div class="form-hint">支持 .zip/.rar/.7z，最大 500MB</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">外部下载链接 <span style="font-weight:normal;color:var(--c-text-tertiary)">（推荐，如网盘链接，服务器存不下时备用）</span></label>
+        <input class="form-input" id="up-download-url" type="url" placeholder="https://pan.baidu.com/s/... 或 https://www.123pan.com/...">
+        <div class="form-hint">如果你的存档比较大，建议提供网盘等外部下载链接作为备选</div>
       </div>
       <div class="form-group">
         <label class="form-label">展示图片（可选，最多 5 张）</label>
@@ -453,6 +473,9 @@ MC.openUploadModal = function() {
     </div>`;
 
   MC.Modal.open('upload-modal');
+
+  // 初始化 Mod 构建器
+  MC.initModBuilder();
 
   // 恢复草稿
   setTimeout(function() {
@@ -496,6 +519,131 @@ MC._loadDraft = function() {
 
 MC._clearDraft = function() {
   sessionStorage.removeItem('mc-upload-draft');
+};
+
+// ===== Mod 列表构建 =====
+MC.gatherMods = function() {
+  var rows = document.querySelectorAll('#mods-container .mod-row');
+  var mods = [];
+  rows.forEach(function(row) {
+    var inputs = row.querySelectorAll('input[type="text"], input[type="url"]');
+    var name = (inputs[0].value || '').trim();
+    if (name) {
+      mods.push({ name: name, url: (inputs[1].value || '').trim() });
+    }
+  });
+  return mods;
+};
+
+/** 收集 Mod 文件，返回 {modsJson, modFiles}  */
+MC.gatherModFiles = function() {
+  var rows = document.querySelectorAll('#mods-container .mod-row');
+  var mods = [];
+  var files = [];
+  rows.forEach(function(row) {
+    var inputs = row.querySelectorAll('input[type="text"], input[type="url"]');
+    var fileInput = row.querySelector('input[type="file"]');
+    var name = (inputs[0].value || '').trim();
+    if (name) {
+      mods.push({ name: name, url: (inputs[1].value || '').trim() });
+      if (fileInput && fileInput.files[0]) {
+        files.push(fileInput.files[0]);
+      } else {
+        files.push(null);
+      }
+    }
+  });
+  return { modsJson: JSON.stringify(mods), modFiles: files };
+};
+
+MC.initModBuilder = function(modsJson) {
+  var container = document.getElementById('mods-container');
+  if (!container) return;
+
+  // 绑定添加按钮
+  var addBtn = document.getElementById('add-mod-btn');
+  if (addBtn) {
+    addBtn.onclick = function() {
+      var row = document.createElement('div');
+      row.className = 'mod-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+      row.innerHTML = '<input class="form-input" type="text" placeholder="Mod 名称" style="flex:2">' +
+        '<input class="form-input" type="url" placeholder="下载链接（可选）" style="flex:2">' +
+        '<input type="file" accept=".jar,.zip" style="display:none" class="mod-file-input">' +
+        '<button class="btn btn-ghost btn-sm mod-file-btn" style="flex-shrink:0;font-size:18px" title="上传 Mod 文件 (jar/zip)">📦</button>' +
+        '<button class="btn btn-ghost btn-sm mod-del-btn" style="flex-shrink:0">✕</button>';
+      row.querySelector('.mod-del-btn').onclick = function() {
+        row.remove();
+        MC._updateModDelBtns();
+      };
+      MC._bindModFileBtn(row);
+      container.appendChild(row);
+      MC._updateModDelBtns();
+    };
+  }
+
+  // 填入已有 mods（编辑时）
+  var mods = [];
+  if (modsJson) {
+    try { mods = JSON.parse(modsJson); } catch(e) {}
+  }
+  if (mods.length > 0) {
+    container.innerHTML = '';
+    mods.forEach(function(m) {
+      var row = document.createElement('div');
+      row.className = 'mod-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+      row.innerHTML = '<input class="form-input" type="text" value="' + MC.UI.esc(m.name || '') + '" placeholder="Mod 名称" style="flex:2">' +
+        '<input class="form-input" type="url" value="' + MC.UI.esc(m.url || '') + '" placeholder="下载链接（可选）" style="flex:2">' +
+        '<input type="file" accept=".jar,.zip" style="display:none" class="mod-file-input">' +
+        '<button class="btn btn-ghost btn-sm mod-file-btn" style="flex-shrink:0;font-size:18px" title="替换 Mod 文件 (jar/zip)">📦</button>' +
+        '<button class="btn btn-ghost btn-sm mod-del-btn" style="flex-shrink:0">✕</button>';
+      row.querySelector('.mod-del-btn').onclick = function() {
+        row.remove();
+        MC._updateModDelBtns();
+      };
+      MC._bindModFileBtn(row);
+      container.appendChild(row);
+    });
+  } else {
+    // 默认一行需要绑定删除事件和文件按钮
+    var firstRow = container.querySelector('.mod-row');
+    if (firstRow) {
+      var delBtn = firstRow.querySelector('.mod-del-btn');
+      if (delBtn) delBtn.onclick = function() {
+        firstRow.remove();
+        MC._updateModDelBtns();
+      };
+      MC._bindModFileBtn(firstRow);
+    }
+  }
+  MC._updateModDelBtns();
+};
+
+MC._updateModDelBtns = function() {
+  var rows = document.querySelectorAll('#mods-container .mod-row');
+  var btns = document.querySelectorAll('#mods-container .mod-del-btn');
+  if (rows.length <= 1) {
+    btns.forEach(function(b) { b.disabled = true; });
+  } else {
+    btns.forEach(function(b) { b.disabled = false; });
+  }
+};
+
+MC._bindModFileBtn = function(row) {
+  var fileInput = row.querySelector('.mod-file-input');
+  var fileBtn = row.querySelector('.mod-file-btn');
+  if (!fileInput || !fileBtn) return;
+  fileBtn.onclick = function() { fileInput.click(); };
+  fileInput.onchange = function() {
+    if (fileInput.files[0]) {
+      fileBtn.textContent = '✅';
+      fileBtn.title = fileInput.files[0].name;
+    } else {
+      fileBtn.textContent = '📦';
+      fileBtn.title = '上传 Mod 文件 (jar/zip)';
+    }
+  };
 };
 
 MC.handleImageSelect = function(e) {
@@ -542,6 +690,16 @@ MC.handleUpload = async function() {
   fd.append('mcVersion', document.getElementById('up-ver').value);
   fd.append('modLoader', document.getElementById('up-loader').value);
   fd.append('description', desc);
+
+  // 收集 Mod 列表和文件
+  var modData = MC.gatherModFiles();
+  if (modData.modsJson !== '[]') fd.append('modsJson', modData.modsJson);
+  modData.modFiles.forEach(function(f) {
+    if (f) fd.append('modFiles', f);
+  });
+
+  var downloadUrl = (document.getElementById('up-download-url') || {}).value || '';
+  if (downloadUrl.trim()) fd.append('downloadUrl', downloadUrl.trim());
 
   const file = document.getElementById('up-file').files[0];
   if (file) fd.append('file', file);
@@ -844,7 +1002,7 @@ MC.renderHome = async function(fullRender) {
 
   // 加载元数据
   if (fullRender !== false) {
-    try { MC.State.meta = await MC.API.getMetadata(); } catch {}
+    try { MC.State.meta = await MC.API.getMetadata(); } catch { MC.State.meta = { categories: [], mcVersions: [], modLoaders: [] }; }
   }
 
   // 加载存档数据
@@ -994,6 +1152,8 @@ MC.renderDetail = async function(id) {
 
         <h1 class="detail-title">${MC.UI.esc(a.title)}</h1>
 
+        ${MC._renderMods(a.modsJson)}
+
         <div class="detail-author-row">
           <div class="detail-author-avatar">${MC.UI.esc((a.authorName || '?')[0])}</div>
           <div>
@@ -1025,6 +1185,31 @@ MC.renderDetail = async function(id) {
       </div>
     </div>
   </div>`;
+};
+
+// ===== Mod 列表渲染 =====
+MC._renderMods = function(modsJson) {
+  if (!modsJson) return '';
+  var mods = [];
+  try { mods = JSON.parse(modsJson); } catch(e) { return ''; }
+  if (!mods.length) return '';
+  var items = mods.map(function(m) {
+    var name = MC.UI.esc(m.name || '');
+    var parts = [];
+    // Mod 名称标签
+    if (m.url) {
+      parts.push('<a href="' + MC.UI.esc(m.url) + '" target="_blank" rel="noopener" class="mod-link-item">' + name + '</a>');
+    } else {
+      parts.push('<span class="mod-link-item">' + name + '</span>');
+    }
+    // 如果上传了 Mod 文件，显示下载链接
+    if (m.filePath) {
+      var dl = '/api/archives/0/mod-download?path=' + encodeURIComponent(m.filePath);
+      parts.push('<a href="' + dl + '" class="mod-link-item mod-dl-item" title="下载 ' + MC.UI.esc(m.name) + '">⬇</a>');
+    }
+    return '<span style="display:inline-flex;align-items:center;gap:2px">' + parts.join('') + '</span>';
+  }).join('');
+  return '<div class="mods-section"><span class="mods-label">📦 所需 Mod</span>' + items + '</div>';
 };
 
 // ================================================================
@@ -1096,7 +1281,8 @@ MC.renderProfile = async function() {
   </div>`;
 
   // 刷新用户信息（获取最新 email 状态）
-  try { MC.State.currentUser = await MC.API.checkAuth(); } catch {}
+  try { MC.State.currentUser = await MC.API.checkAuth(); } catch { /* 认证失败继续，currentUser 保持原值 */ }
+  if (!MC.State.currentUser) { MC.navigate('home'); MC.Toast.show('请先登录', 'error'); return; }
 
   let myArchives = [], myBookmarks = [], myDownloads = [];
   try { myArchives = await MC.API.getMyArchives(); } catch {}
@@ -1111,7 +1297,7 @@ MC.renderProfile = async function() {
     <!-- 个人信息卡片 -->
     <div class="profile-header">
       <div class="profile-avatar"
-        style="${u.avatarUrl ? `background-image:url('${u.avatarUrl}');background-size:cover` : ''}">
+        style="${u.avatarUrl ? `background-image:url('${MC.UI.esc(u.avatarUrl)}');background-size:cover` : ''}">
         ${u.avatarUrl ? '' : MC.UI.esc(u.username[0])}
       </div>
       <div class="profile-info">
@@ -1255,7 +1441,7 @@ MC.loadProfileFollowData = async function() {
       ? '<p style="font-size:var(--fs-sm);color:var(--c-text-tertiary);text-align:center;padding:var(--sp-4)">还没有关注任何作者，去 <a href="#" onclick="MC.navigate(\'home\')" style="color:var(--c-primary)">发现页</a> 看看吧</p>'
       : '<div class="author-list">' + following.map(function(u) {
           return '<div class="author-item" onclick="MC.navigateAuthor(' + u.id + ',\'' + MC.UI.esc(u.nickname || u.username) + '\')">'
-            + '<div class="author-avatar" style="' + (u.avatarUrl ? 'background-image:url(' + u.avatarUrl + ');background-size:cover' : '') + '">'
+            + '<div class="author-avatar" style="' + (u.avatarUrl ? 'background-image:url(\'' + MC.UI.esc(u.avatarUrl) + '\');background-size:cover' : '') + '">'
             + (u.avatarUrl ? '' : MC.UI.esc((u.nickname || u.username)[0]))
             + '</div>'
             + '<div class="author-info"><span class="author-name">' + MC.UI.esc(u.nickname || u.username) + '</span></div>'
@@ -1314,7 +1500,7 @@ MC.doAuthorSearch = async function() {
     }
     results.innerHTML = '<div class="author-list">' + users.map(function(u) {
       return '<div class="author-item" style="cursor:pointer" onclick="MC.Modal.close(\'auth-modal\');MC.navigateAuthor(' + u.id + ',\'' + MC.UI.esc(u.nickname || u.username) + '\')">'
-        + '<div class="author-avatar" style="' + (u.avatarUrl ? 'background-image:url(' + u.avatarUrl + ');background-size:cover' : '') + '">'
+        + '<div class="author-avatar" style="' + (u.avatarUrl ? 'background-image:url(\'' + MC.UI.esc(u.avatarUrl) + '\');background-size:cover' : '') + '">'
         + (u.avatarUrl ? '' : MC.UI.esc((u.nickname || u.username)[0]))
         + '</div>'
         + '<div class="author-info"><span class="author-name">' + MC.UI.esc(u.nickname || u.username) + '</span>'
@@ -1707,4 +1893,7 @@ MC.init = async function() {
 };
 
 // 启动应用
-MC.init();
+MC.init().catch(function(e) {
+  console.error('App init failed:', e);
+  MC.Toast.show('应用初始化失败，请刷新页面', 'error');
+});

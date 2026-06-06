@@ -1,5 +1,5 @@
 /**
- * MC Archive Hub v2 — 数据层
+ * MC Archive Hub v3 · 数据层
  * 常量定义 + 全局状态管理 + 工具函数
  */
 window.MC = window.MC || {};

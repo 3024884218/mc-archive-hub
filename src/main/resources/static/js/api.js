@@ -1,5 +1,5 @@
 /**
- * MC Archive Hub v2 — API 层
+ * MC Archive Hub v3 · API 层
  * 封装所有后端请求，自动注入 CSRF Token
  */
 window.MC = window.MC || {};

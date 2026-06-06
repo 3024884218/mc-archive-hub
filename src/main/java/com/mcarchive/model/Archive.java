@@ -34,6 +34,14 @@ public class Archive {
     @Column(nullable = false, length = 20)
     private String modLoader;
 
+    /** 所需 Mod 列表，JSON 数组：[{"name":"Fabric API","url":"https://..."}, ...] */
+    @Column(columnDefinition = "TEXT")
+    private String modsJson;
+
+    /** 外部下载链接（可选，如网盘链接） */
+    @Column(length = 500)
+    private String downloadUrl;
+
     /** 存档详细介绍，最大2000字 */
     @Column(nullable = false, length = 2000)
     private String description;
@@ -95,6 +103,12 @@ public class Archive {
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+
+    public String getModsJson() { return modsJson; }
+    public void setModsJson(String modsJson) { this.modsJson = modsJson; }
+
+    public String getDownloadUrl() { return downloadUrl; }
+    public void setDownloadUrl(String downloadUrl) { this.downloadUrl = downloadUrl; }
 
     public int getLikeCount() { return likeCount; }
     public void setLikeCount(int likeCount) { this.likeCount = likeCount; }

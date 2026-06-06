@@ -217,6 +217,19 @@ public class ArchiveController {
             .body(resource);
     }
 
+    /** 下载 Mod 文件 */
+    @GetMapping("/{id}/mod-download")
+    public ResponseEntity<?> downloadModFile(@PathVariable Long id,
+                                              @RequestParam String path) {
+        Resource resource = new FileSystemResource(uploadRoot.resolve(path));
+        if (!resource.exists()) return ResponseEntity.notFound().build();
+        String filename = path.substring(path.lastIndexOf('/') + 1);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(resource);
+    }
+
     /** 查看某作者的存档（分页） */
     @GetMapping("/author/{authorId}")
     public ResponseEntity<?> getArchivesByAuthor(
@@ -379,6 +392,8 @@ public class ArchiveController {
         map.put("category", a.getCategory());
         map.put("mcVersion", a.getMcVersion());
         map.put("modLoader", a.getModLoader());
+        map.put("modsJson", a.getModsJson());
+        map.put("downloadUrl", a.getDownloadUrl());
         map.put("description", a.getDescription());
         map.put("likeCount", a.getLikeCount());
         map.put("downloadCount", a.getDownloadCount());

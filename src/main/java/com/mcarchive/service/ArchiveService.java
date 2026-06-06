@@ -64,6 +64,8 @@ public class ArchiveService {
         archive.setCategory(req.getCategory());
         archive.setMcVersion(req.getMcVersion());
         archive.setModLoader(req.getModLoader());
+        archive.setModsJson(req.getModsJson());
+        archive.setDownloadUrl(req.getDownloadUrl());
         archive.setDescription(req.getDescription());
         archive.setCreatedAt(LocalDateTime.now());
         archive.setLikeCount(0);
@@ -95,6 +97,14 @@ public class ArchiveService {
                     imageList.add(ai);
                 }
                 archive.setImages(imageList);
+            }
+
+            // 处理 Mod 文件
+            List<MultipartFile> modFiles = req.getModFiles();
+            String modsJson = archive.getModsJson();
+            if (modFiles != null && !modFiles.isEmpty() && modsJson != null) {
+                modsJson = injectModFilePaths(modsJson, modFiles, archive.getId());
+                archive.setModsJson(modsJson);
             }
         } catch (Exception e) {
             throw new RuntimeException("文件存储失败: " + e.getMessage(), e);
@@ -330,6 +340,8 @@ public class ArchiveService {
         archive.setCategory(req.getCategory());
         archive.setMcVersion(req.getMcVersion());
         archive.setModLoader(req.getModLoader());
+        archive.setModsJson(req.getModsJson());
+        archive.setDownloadUrl(req.getDownloadUrl());
         archive.setDescription(req.getDescription());
 
         // 如果有新截图
@@ -353,6 +365,14 @@ public class ArchiveService {
             // 替换全部图片
             archive.getImages().clear();
             archive.getImages().addAll(imageList);
+        }
+
+        // 处理 Mod 文件
+        List<MultipartFile> modFiles = req.getModFiles();
+        String modsJson = archive.getModsJson();
+        if (modFiles != null && !modFiles.isEmpty() && modsJson != null) {
+            modsJson = injectModFilePaths(modsJson, modFiles, archiveId);
+            archive.setModsJson(modsJson);
         }
 
         return archiveRepository.save(archive);
@@ -496,5 +516,33 @@ public class ArchiveService {
         if (!comment.getAuthor().getId().equals(user.getId())) return false;
         commentRepository.delete(comment);
         return true;
+    }
+
+    /**
+     * 将上传的 Mod 文件路径注入 modsJson 数组。
+     * modsJson 格式: [{"name":"...","url":"...","fileIdx":0}, ...]
+     * modFiles 列表顺序与 fileIdx 对应
+     */
+    private String injectModFilePaths(String modsJson, List<MultipartFile> modFiles, Long archiveId) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(modsJson);
+            if (!root.isArray()) return modsJson;
+
+            for (int i = 0; i < root.size() && i < modFiles.size(); i++) {
+                MultipartFile modFile = modFiles.get(i);
+                if (modFile != null && !modFile.isEmpty()) {
+                    try {
+                        String path = fileStorageService.storeModFile(archiveId, modFile, i);
+                        ((com.fasterxml.jackson.databind.node.ObjectNode) root.get(i)).put("filePath", path);
+                    } catch (IOException e) {
+                        // 单个 Mod 文件存储失败不阻断整体
+                    }
+                }
+            }
+            return mapper.writeValueAsString(root);
+        } catch (Exception e) {
+            return modsJson;
+        }
     }
 }

@@ -31,9 +31,18 @@ public class CreateArchiveRequest {
     @Size(min = 10, max = 2000, message = "介绍 10~2000 字")
     private String description;
 
+    /** 所需 Mod 列表，JSON 字符串 */
+    private String modsJson;
+
+    /** 外部下载链接（可选，如网盘链接） */
+    private String downloadUrl;
+
     private MultipartFile file;
 
     private List<MultipartFile> images;
+
+    /** Mod 文件列表（与 modsJson 中的条目顺序对应，无文件的 slot 传 null） */
+    private List<MultipartFile> modFiles;
 
     // ===== Getter / Setter =====
     public String getTitle()       { return title; }
@@ -46,8 +55,14 @@ public class CreateArchiveRequest {
     public void setModLoader(String l) { this.modLoader = l; }
     public String getDescription() { return description; }
     public void setDescription(String d) { this.description = d; }
+    public String getModsJson() { return modsJson; }
+    public void setModsJson(String m) { this.modsJson = m; }
+    public String getDownloadUrl() { return downloadUrl; }
+    public void setDownloadUrl(String u) { this.downloadUrl = u; }
     public MultipartFile getFile() { return file; }
     public void setFile(MultipartFile f) { this.file = f; }
     public List<MultipartFile> getImages() { return images; }
     public void setImages(List<MultipartFile> imgs) { this.images = imgs; }
+    public List<MultipartFile> getModFiles() { return modFiles; }
+    public void setModFiles(List<MultipartFile> mf) { this.modFiles = mf; }
 }
