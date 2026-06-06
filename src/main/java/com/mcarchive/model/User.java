@@ -77,6 +77,17 @@ public class User {
     /** 账号锁定截止时间 */
     private LocalDateTime accountLockedUntil;
 
+    /** 信任的设备列表，JSON 数组：[{hash, name, createdAt}] */
+    @Column(columnDefinition = "TEXT")
+    private String trustedDevices;
+
+    /** 设备验证码（6位数字，新设备登录时用） */
+    @Column(length = 10)
+    private String deviceVerifyCode;
+
+    /** 设备验证码过期时间 */
+    private LocalDateTime deviceVerifyExpiry;
+
     // ===== Getter / Setter =====
 
     public Long getId() { return id; }
@@ -117,6 +128,13 @@ public class User {
 
     public LocalDateTime getAccountLockedUntil() { return accountLockedUntil; }
     public void setAccountLockedUntil(LocalDateTime accountLockedUntil) { this.accountLockedUntil = accountLockedUntil; }
+
+    public String getTrustedDevices() { return trustedDevices; }
+    public void setTrustedDevices(String trustedDevices) { this.trustedDevices = trustedDevices; }
+    public String getDeviceVerifyCode() { return deviceVerifyCode; }
+    public void setDeviceVerifyCode(String deviceVerifyCode) { this.deviceVerifyCode = deviceVerifyCode; }
+    public LocalDateTime getDeviceVerifyExpiry() { return deviceVerifyExpiry; }
+    public void setDeviceVerifyExpiry(LocalDateTime deviceVerifyExpiry) { this.deviceVerifyExpiry = deviceVerifyExpiry; }
 
     public String getAvatarPath() { return avatarPath; }
     public void setAvatarPath(String avatarPath) { this.avatarPath = avatarPath; }

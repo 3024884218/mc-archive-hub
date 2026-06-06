@@ -323,18 +323,69 @@ MC.handleLogin = async function(u, p) {
     MC.State.currentUser = r.user;
     MC.Modal.close('auth-modal');
     MC.UI.updateHeader();
-    MC.Toast.show('登录成功！欢迎回来 👋', 'success');
+    MC.Toast.show('登录成功！欢迎回来', 'success');
     MC.renderPage();
   } catch (e) {
-    // 如果是邮箱未验证，显示引导重发
-    const msg = e.message || '';
-    if (msg.includes('邮箱尚未验证')) {
-      _showAuthError(msg, true);
+    const data = e.data || {};
+    if (data.needDeviceVerify) {
+      _showDeviceVerifyModal(data.username, data.maskedEmail);
+    } else if ((e.message || '').includes('邮箱尚未验证')) {
+      _showAuthError(e.message, true);
     } else {
-      _showAuthError(msg);
+      _showAuthError(e.message);
     }
   }
 };
+
+/** 新设备验证弹窗 */
+function _showDeviceVerifyModal(username, maskedEmail) {
+  var content = document.getElementById('auth-modal-content');
+  content.innerHTML =
+    '<div class="modal-header">' +
+      '<h2 class="modal-title">新设备验证</h2>' +
+      '<button class="modal-close" onclick="MC.Modal.close(\'auth-modal\')">&times;</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<p style="margin-bottom:16px;color:var(--c-text-secondary)">检测到新设备登录，验证码已发送至 <strong>' + MC.UI.esc(maskedEmail) + '</strong></p>' +
+      '<div class="form-group">' +
+        '<label class="form-label">验证码</label>' +
+        '<input class="form-input" id="device-code" type="text" placeholder="输入6位验证码" maxlength="6" style="font-size:20px;text-align:center;letter-spacing:8px" autocomplete="off">' +
+      '</div>' +
+      '<div class="form-error" id="auth-error"><span class="form-error-icon"></span><span id="auth-error-msg"></span></div>' +
+      '<button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" id="device-verify-btn">验证并登录</button>' +
+    '</div>';
+  MC.Modal.open('auth-modal');
+
+  var btn = document.getElementById('device-verify-btn');
+  document.getElementById('device-code').focus();
+  btn.onclick = async function() {
+    var code = document.getElementById('device-code').value.trim();
+    if (!code || code.length !== 6) {
+      var err = document.getElementById('auth-error');
+      document.getElementById('auth-error-msg').textContent = '请输入6位验证码';
+      err.classList.add('show');
+      return;
+    }
+    btn.disabled = true; btn.textContent = '验证中...';
+    try {
+      var r = await MC.API.verifyDevice(username, code);
+      MC.State.currentUser = r.user;
+      MC.Modal.close('auth-modal');
+      MC.UI.updateHeader();
+      MC.Toast.show('验证成功，已登录', 'success');
+      MC.renderPage();
+    } catch(e) {
+      var err = document.getElementById('auth-error');
+      document.getElementById('auth-error-msg').textContent = e.message;
+      err.classList.add('show');
+      btn.disabled = false; btn.textContent = '验证并登录';
+    }
+  };
+  // 回车提交
+  document.getElementById('device-code').onkeydown = function(e) {
+    if (e.key === 'Enter') btn.click();
+  };
+}
 
 MC.handleRegister = async function(u, p, email) {
   try {

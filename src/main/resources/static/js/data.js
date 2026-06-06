@@ -87,17 +87,9 @@ MC.State = {
 MC.Theme = {
   init() {
     const saved = localStorage.getItem('mc-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = saved ? saved === 'dark' : prefersDark;
+    const isDark = saved === 'dark';
     MC.State.darkMode = isDark;
     MC.Theme.apply(isDark);
-
-    // 监听系统主题变化
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (localStorage.getItem('mc-theme') === null) {
-        MC.Theme.apply(e.matches);
-      }
-    });
   },
 
   apply(isDark) {

@@ -152,7 +152,46 @@ public class AuthController {
         }
 
         autoLogin(request, user);
+
+        // 新设备检测：有邮箱且非信任设备时要求验证（在 autoLogin 之后检查以便 session 已建立）
+        if (user.getEmail() != null && !isDeviceTrusted(user, request)) {
+            HttpSession session = request.getSession(false);
+            if (session != null) session.invalidate();
+            SecurityContextHolder.clearContext();
+            return requireDeviceVerify(user, request);
+        }
+
         return ResponseEntity.ok(Map.of("message", "登录成功", "user", userToMap(user)));
+    }
+
+    /** 设备验证确认 */
+    @PostMapping("/verify-device")
+    public ResponseEntity<?> verifyDevice(@RequestBody Map<String, String> body,
+                                           HttpServletRequest request) {
+        String username = body.get("username");
+        String code = body.get("code");
+        if (username == null || code == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "参数不完整"));
+        }
+        User user = userService.findByUsername(username.trim()).orElse(null);
+        if (user == null || user.getDeviceVerifyCode() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "验证码无效或已过期"));
+        }
+        if (user.getDeviceVerifyExpiry() != null
+                && user.getDeviceVerifyExpiry().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "验证码已过期"));
+        }
+        if (!user.getDeviceVerifyCode().equals(code.trim())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "验证码不正确"));
+        }
+        // 信任此设备
+        trustDevice(user, request);
+        user.setDeviceVerifyCode(null);
+        user.setDeviceVerifyExpiry(null);
+        userService.save(user);
+
+        autoLogin(request, user);
+        return ResponseEntity.ok(Map.of("message", "设备验证成功", "user", userToMap(user)));
     }
 
     /**
@@ -540,5 +579,63 @@ public class AuthController {
             profile.put("following", userService.isFollowing(me, id));
         }
         return ResponseEntity.ok(profile);
+    }
+
+    // ===== 设备信任 =====
+
+    private String getDeviceFingerprint(HttpServletRequest request) {
+        String ua = request.getHeader("User-Agent");
+        String ip = getClientIp(request);
+        return String.valueOf(((ua != null ? ua : "") + "|" + ip).hashCode());
+    }
+
+    private boolean isDeviceTrusted(User user, HttpServletRequest request) {
+        String fp = getDeviceFingerprint(request);
+        String json = user.getTrustedDevices();
+        return json != null && json.contains("\"hash\":\"" + fp + "\"");
+    }
+
+    private void trustDevice(User user, HttpServletRequest request) {
+        String fp = getDeviceFingerprint(request);
+        String ua = request.getHeader("User-Agent");
+        String name = (ua != null && ua.length() > 60) ? ua.substring(0, 60) : (ua != null ? ua : "Unknown");
+        String entry = "{\"hash\":\"" + fp + "\",\"name\":\"" + name.replace("\"", "'") + "\",\"createdAt\":\"" + LocalDateTime.now() + "\"}";
+        String existing = user.getTrustedDevices();
+        if (existing != null && !existing.isEmpty()) {
+            // 追加到数组
+            existing = existing.substring(0, existing.length() - 1) + "," + entry + "]";
+            user.setTrustedDevices(existing);
+        } else {
+            user.setTrustedDevices("[" + entry + "]");
+        }
+        userService.save(user);
+    }
+
+    private ResponseEntity<?> requireDeviceVerify(User user, HttpServletRequest request) {
+        String code = String.format("%06d", new java.util.Random().nextInt(1000000));
+        user.setDeviceVerifyCode(code);
+        user.setDeviceVerifyExpiry(LocalDateTime.now().plusMinutes(10));
+        userService.save(user);
+
+        if (emailService.isEmailConfigured()) {
+            emailService.sendDeviceVerifyCode(user.getEmail(), user.getUsername(), code);
+        } else {
+            log.info("设备验证码 [{}]: {}", user.getUsername(), code);
+        }
+
+        String maskedEmail = maskEmail(user.getEmail());
+        return ResponseEntity.status(403).body(Map.of(
+            "needDeviceVerify", true,
+            "username", user.getUsername(),
+            "maskedEmail", maskedEmail,
+            "message", "检测到新设备登录，验证码已发送至 " + maskedEmail
+        ));
+    }
+
+    private String maskEmail(String email) {
+        if (email == null) return "";
+        int at = email.indexOf('@');
+        if (at <= 2) return email;
+        return email.charAt(0) + "***" + email.substring(at);
     }
 }

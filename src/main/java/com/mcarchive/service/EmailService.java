@@ -68,6 +68,22 @@ public class EmailService {
         send(to, subject, htmlBody);
     }
 
+    /** 发送设备验证码 */
+    public void sendDeviceVerifyCode(String to, String username, String code) {
+        String subject = "MC Archive Hub — 新设备登录验证";
+        String htmlBody = "<div style='max-width:560px;margin:0 auto;font-family:-apple-system,sans-serif;padding:24px'>"
+            + "<div style='background:#1a8a1a;padding:20px;border-radius:12px 12px 0 0'>"
+            + "<h1 style='color:#fff;margin:0;font-size:20px'>新设备登录验证</h1></div>"
+            + "<div style='background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px'>"
+            + "<p style='font-size:16px;margin:0 0 16px'>嗨 " + username + "，</p>"
+            + "<p style='font-size:15px;color:#6b7280;margin:0 0 16px'>检测到你的账号在新设备上登录，验证码：</p>"
+            + "<div style='background:#f0fdf4;border:2px dashed #1a8a1a;border-radius:12px;padding:20px;text-align:center;margin:16px 0'>"
+            + "<span style='font-size:32px;font-weight:700;letter-spacing:8px;color:#1a8a1a'>" + code + "</span></div>"
+            + "<p style='font-size:13px;color:#9ca3af;margin:16px 0 0'>10 分钟内有效。如非本人操作请忽略。</p>"
+            + "</div></div>";
+        send(to, subject, htmlBody);
+    }
+
     // ===== 内部方法 =====
 
     private void send(String to, String subject, String htmlBody) {

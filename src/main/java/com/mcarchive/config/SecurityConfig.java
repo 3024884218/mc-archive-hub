@@ -39,7 +39,7 @@ public class SecurityConfig {
                 // 公开访问：静态资源 + 认证接口 + 存档浏览
                 .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/images/**", "/uploads/**",
                                  "/api/auth/register", "/api/auth/login",
-                                 "/api/auth/verify-email",
+                                 "/api/auth/verify-email", "/api/auth/verify-device",
                                  "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()
                 // 存档读取公开（浏览不需要登录）；写入操作由 Controller 内 requireAuth() 保护
                 .requestMatchers("GET", "/api/archives/**").permitAll()

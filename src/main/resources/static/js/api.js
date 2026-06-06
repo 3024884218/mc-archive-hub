@@ -58,7 +58,12 @@ MC.API = {
 
     if (!res.ok) {
       const msg = typeof data === 'object' ? (data.error || data.message || '请求失败') : (data || '请求失败');
-      throw new Error(msg);
+      const err = new Error(msg);
+      // 携带完整响应数据，方便上层按业务逻辑处理
+      if (typeof data === 'object') {
+        err.data = data;
+      }
+      throw err;
     }
     return data;
   },
@@ -74,6 +79,7 @@ MC.API = {
   // ===== Auth =====
   async checkAuth()    { return this._fetch('/api/auth/me'); },
   async login(u, p)    { return this._fetch('/api/auth/login',    { method:'POST', body:JSON.stringify({username:u, password:p}) }); },
+  async verifyDevice(u, code) { return this._fetch('/api/auth/verify-device', { method:'POST', body:JSON.stringify({username:u, code:code}) }); },
   async register(u, p, email) { return this._fetch('/api/auth/register', { method:'POST', body:JSON.stringify({username:u, password:p, email: email || ''}) }); },
   async logout()       { return this._fetch('/api/auth/logout', { method:'POST' }); },
 
