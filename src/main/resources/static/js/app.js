@@ -509,7 +509,7 @@ MC.openUploadModal = function() {
         <label class="form-label">存档文件</label>
         <input type="file" id="up-file" accept=".zip,.rar,.7z"
           style="font-size:14px">
-        <div class="form-hint">支持 .zip/.rar/.7z，最大 500MB</div>
+        <div class="form-hint">支持 .zip/.rar/.7z，无大小限制</div>
       </div>
       <div class="form-group">
         <label class="form-label">外部下载链接 <span style="font-weight:normal;color:var(--c-text-tertiary)">（推荐，如网盘链接，服务器存不下时备用）</span></label>
