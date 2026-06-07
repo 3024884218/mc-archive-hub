@@ -36,20 +36,11 @@ public class FileStorageService {
         ".zip", ".rar", ".7z"
     );
 
-    /** 图片最大大小：10MB */
-    private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024;
-
     /** 允许的 Mod 扩展名 */
     private static final Set<String> ALLOWED_MOD_EXTENSIONS = Set.of(".jar", ".zip");
 
-    /** Mod 文件最大大小：50MB */
-    private static final long MAX_MOD_SIZE = 50 * 1024 * 1024;
-
     /** 允许的资源包扩展名 */
     private static final Set<String> ALLOWED_RESOURCEPACK_EXTENSIONS = Set.of(".zip", ".rar", ".7z");
-
-    /** 资源包文件最大大小：100MB */
-    private static final long MAX_RESOURCEPACK_SIZE = 100 * 1024 * 1024;
 
     private final Path uploadRoot;
 
@@ -106,12 +97,6 @@ public class FileStorageService {
             throw new IllegalArgumentException("图片文件不能为空");
         }
 
-        // 大小限制
-        if (file.getSize() > MAX_IMAGE_SIZE) {
-            throw new IllegalArgumentException(
-                "图片大小不能超过 10MB，当前: " + (file.getSize() / 1024 / 1024) + "MB");
-        }
-
         // 扩展名白名单校验
         String originalName = file.getOriginalFilename();
         String extension = extractExtension(originalName);
@@ -146,9 +131,6 @@ public class FileStorageService {
         if (!ALLOWED_MOD_EXTENSIONS.contains(extension.toLowerCase())) {
             throw new IllegalArgumentException("不支持的 Mod 格式: " + extension + "，仅支持 .jar / .zip");
         }
-        if (file.getSize() > MAX_MOD_SIZE) {
-            throw new IllegalArgumentException("Mod 文件不能超过 50MB");
-        }
 
         Path archiveDir = getArchiveDir(archiveId);
         Files.createDirectories(archiveDir);
@@ -175,9 +157,6 @@ public class FileStorageService {
         String extension = extractExtension(originalName);
         if (!ALLOWED_RESOURCEPACK_EXTENSIONS.contains(extension.toLowerCase())) {
             throw new IllegalArgumentException("不支持的资源包格式: " + extension + "，仅支持 .zip / .rar / .7z");
-        }
-        if (file.getSize() > MAX_RESOURCEPACK_SIZE) {
-            throw new IllegalArgumentException("资源包文件不能超过 100MB");
         }
 
         Path archiveDir = getArchiveDir(archiveId);
