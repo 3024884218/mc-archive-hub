@@ -219,7 +219,6 @@ public class AuthController {
 
     /**
      * 自动登录：将用户注入 SecurityContext 并持久化到 Session
-     * 调用 changeSessionId() 防止会话固定攻击
      */
     private void autoLogin(HttpServletRequest request, User user) {
         HttpSession session = request.getSession(true);
