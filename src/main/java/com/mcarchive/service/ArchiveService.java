@@ -97,7 +97,8 @@ public class ArchiveService {
                     ai.setSortOrder(order++);
                     imageList.add(ai);
                 }
-                archive.setImages(imageList);
+                archive.getImages().clear();
+                archive.getImages().addAll(imageList);
             }
 
             // 处理 Mod 文件

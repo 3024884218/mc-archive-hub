@@ -142,5 +142,5 @@ public class Archive {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
     public List<ArchiveImage> getImages() { return images; }
-    public void setImages(List<ArchiveImage> images) { this.images = images; }
+    public void setImages(List<ArchiveImage> images) { this.images.clear(); this.images.addAll(images); }
 }
