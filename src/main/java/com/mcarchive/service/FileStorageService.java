@@ -45,6 +45,12 @@ public class FileStorageService {
     /** Mod 文件最大大小：50MB */
     private static final long MAX_MOD_SIZE = 50 * 1024 * 1024;
 
+    /** 允许的资源包扩展名 */
+    private static final Set<String> ALLOWED_RESOURCEPACK_EXTENSIONS = Set.of(".zip", ".rar", ".7z");
+
+    /** 资源包文件最大大小：100MB */
+    private static final long MAX_RESOURCEPACK_SIZE = 100 * 1024 * 1024;
+
     private final Path uploadRoot;
 
     public FileStorageService(@Value("${app.upload.dir}") String uploadDir) {
@@ -152,6 +158,36 @@ public class FileStorageService {
         Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
 
         log.info("Mod 文件已存储: archiveId={}, index={}, path={}", archiveId, index, targetPath);
+        return "archives/" + archiveId + "/" + safeName;
+    }
+
+    /**
+     * 存储资源包文件
+     * @param archiveId 存档ID
+     * @param file 上传的资源包文件
+     * @param index resourcePacksJson 数组中的索引
+     * @return 相对路径
+     */
+    public String storeResourcePackFile(Long archiveId, MultipartFile file, int index) throws IOException {
+        if (file == null || file.isEmpty()) return null;
+
+        String originalName = file.getOriginalFilename();
+        String extension = extractExtension(originalName);
+        if (!ALLOWED_RESOURCEPACK_EXTENSIONS.contains(extension.toLowerCase())) {
+            throw new IllegalArgumentException("不支持的资源包格式: " + extension + "，仅支持 .zip / .rar / .7z");
+        }
+        if (file.getSize() > MAX_RESOURCEPACK_SIZE) {
+            throw new IllegalArgumentException("资源包文件不能超过 100MB");
+        }
+
+        Path archiveDir = getArchiveDir(archiveId);
+        Files.createDirectories(archiveDir);
+
+        String safeName = "rp_" + index + "_" + sanitizeName(originalName);
+        Path targetPath = archiveDir.resolve(safeName);
+        Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+        log.info("资源包文件已存储: archiveId={}, index={}, path={}", archiveId, index, targetPath);
         return "archives/" + archiveId + "/" + safeName;
     }
 

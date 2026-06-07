@@ -485,6 +485,20 @@ MC.openUploadModal = function() {
         <div class="form-hint">填写玩家运行此存档所需要的 Mod，方便下载者快速安装</div>
       </div>
       <div class="form-group">
+        <label class="form-label">所需资源包 <span style="font-weight:normal;color:var(--c-text-tertiary)">（可选，如材质包/纹理包，可附上名称和下载链接）</span></label>
+        <div id="rp-container">
+          <div class="mod-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+            <input class="form-input" type="text" placeholder="资源包名称，如 Faithful" style="flex:2">
+            <input class="form-input" type="url" placeholder="下载链接（可选）" style="flex:2">
+            <input type="file" accept=".zip,.rar,.7z" style="display:none" class="rp-file-input">
+            <button class="btn btn-ghost btn-sm rp-file-btn" style="flex-shrink:0;font-size:18px" title="上传资源包文件 (zip/rar/7z)">🎨</button>
+            <button class="btn btn-ghost btn-sm rp-del-btn" disabled style="flex-shrink:0">✕</button>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" id="add-rp-btn">+ 添加资源包</button>
+        <div class="form-hint">如果此存档需要特定资源包才能达到最佳效果，请在此添加</div>
+      </div>
+      <div class="form-group">
         <label class="form-label" for="up-desc">存档介绍 *</label>
         <textarea class="form-textarea" id="up-desc"
           placeholder="描述你的存档内容、特色、适用版本等..."
@@ -527,6 +541,9 @@ MC.openUploadModal = function() {
 
   // 初始化 Mod 构建器
   MC.initModBuilder();
+
+  // 初始化资源包构建器
+  MC.initResourcePackBuilder();
 
   // 恢复草稿
   setTimeout(function() {
@@ -671,6 +688,115 @@ MC.initModBuilder = function(modsJson) {
   MC._updateModDelBtns();
 };
 
+// ===== 资源包列表构建 =====
+MC.gatherResourcePackFiles = function() {
+  var rows = document.querySelectorAll('#rp-container .mod-row');
+  var rps = [];
+  var files = [];
+  rows.forEach(function(row) {
+    var inputs = row.querySelectorAll('input[type="text"], input[type="url"]');
+    var fileInput = row.querySelector('input[type="file"]');
+    var name = (inputs[0].value || '').trim();
+    if (name) {
+      rps.push({ name: name, url: (inputs[1].value || '').trim() });
+      if (fileInput && fileInput.files[0]) {
+        files.push(fileInput.files[0]);
+      } else {
+        files.push(null);
+      }
+    }
+  });
+  return { rpJson: JSON.stringify(rps), rpFiles: files };
+};
+
+MC.initResourcePackBuilder = function(rpJson) {
+  var container = document.getElementById('rp-container');
+  if (!container) return;
+
+  // 绑定添加按钮
+  var addBtn = document.getElementById('add-rp-btn');
+  if (addBtn) {
+    addBtn.onclick = function() {
+      var row = document.createElement('div');
+      row.className = 'mod-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+      row.innerHTML = '<input class="form-input" type="text" placeholder="资源包名称" style="flex:2">' +
+        '<input class="form-input" type="url" placeholder="下载链接（可选）" style="flex:2">' +
+        '<input type="file" accept=".zip,.rar,.7z" style="display:none" class="rp-file-input">' +
+        '<button class="btn btn-ghost btn-sm rp-file-btn" style="flex-shrink:0;font-size:18px" title="上传资源包文件 (zip/rar/7z)">🎨</button>' +
+        '<button class="btn btn-ghost btn-sm rp-del-btn" style="flex-shrink:0">✕</button>';
+      row.querySelector('.rp-del-btn').onclick = function() {
+        row.remove();
+        MC._updateRpDelBtns();
+      };
+      MC._bindRpFileBtn(row);
+      container.appendChild(row);
+      MC._updateRpDelBtns();
+    };
+  }
+
+  // 填入已有资源包（编辑时）
+  var rps = [];
+  if (rpJson) {
+    try { rps = JSON.parse(rpJson); } catch(e) {}
+  }
+  if (rps.length > 0) {
+    container.innerHTML = '';
+    rps.forEach(function(rp) {
+      var row = document.createElement('div');
+      row.className = 'mod-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+      row.innerHTML = '<input class="form-input" type="text" value="' + MC.UI.esc(rp.name || '') + '" placeholder="资源包名称" style="flex:2">' +
+        '<input class="form-input" type="url" value="' + MC.UI.esc(rp.url || '') + '" placeholder="下载链接（可选）" style="flex:2">' +
+        '<input type="file" accept=".zip,.rar,.7z" style="display:none" class="rp-file-input">' +
+        '<button class="btn btn-ghost btn-sm rp-file-btn" style="flex-shrink:0;font-size:18px" title="替换资源包文件 (zip/rar/7z)">🎨</button>' +
+        '<button class="btn btn-ghost btn-sm rp-del-btn" style="flex-shrink:0">✕</button>';
+      row.querySelector('.rp-del-btn').onclick = function() {
+        row.remove();
+        MC._updateRpDelBtns();
+      };
+      MC._bindRpFileBtn(row);
+      container.appendChild(row);
+    });
+  } else {
+    // 默认一行需要绑定删除事件和文件按钮
+    var firstRow = container.querySelector('.mod-row');
+    if (firstRow) {
+      var delBtn = firstRow.querySelector('.rp-del-btn');
+      if (delBtn) delBtn.onclick = function() {
+        firstRow.remove();
+        MC._updateRpDelBtns();
+      };
+      MC._bindRpFileBtn(firstRow);
+    }
+  }
+  MC._updateRpDelBtns();
+};
+
+MC._bindRpFileBtn = function(row) {
+  var btn = row.querySelector('.rp-file-btn');
+  var input = row.querySelector('.rp-file-input');
+  if (btn && input) {
+    btn.onclick = function() { input.click(); };
+    input.onchange = function() {
+      if (input.files[0]) {
+        btn.textContent = '✅';
+        btn.title = input.files[0].name;
+      } else {
+        btn.textContent = '🎨';
+      }
+    };
+  }
+};
+
+MC._updateRpDelBtns = function() {
+  var rows = document.querySelectorAll('#rp-container .mod-row');
+  rows.forEach(function(r) {
+    var btn = r.querySelector('.rp-del-btn');
+    if (btn) btn.disabled = rows.length <= 1;
+  });
+};
+
 MC._updateModDelBtns = function() {
   var rows = document.querySelectorAll('#mods-container .mod-row');
   var btns = document.querySelectorAll('#mods-container .mod-del-btn');
@@ -747,6 +873,13 @@ MC.handleUpload = async function() {
   if (modData.modsJson !== '[]') fd.append('modsJson', modData.modsJson);
   modData.modFiles.forEach(function(f) {
     if (f) fd.append('modFiles', f);
+  });
+
+  // 收集资源包列表和文件
+  var rpData = MC.gatherResourcePackFiles();
+  if (rpData.rpJson !== '[]') fd.append('resourcePacksJson', rpData.rpJson);
+  rpData.rpFiles.forEach(function(f) {
+    if (f) fd.append('resourcePackFiles', f);
   });
 
   var downloadUrl = (document.getElementById('up-download-url') || {}).value || '';
@@ -879,6 +1012,11 @@ MC.handleDeleteComment = async function(commentId) {
 MC.handleDownload = function(id) {
   window.open('/api/archives/' + id + '/download', '_blank');
   MC.Toast.show('下载开始！', 'success');
+};
+
+MC.handleDownloadAll = function(id) {
+  window.open('/api/archives/' + id + '/download-all', '_blank');
+  MC.Toast.show('正在打包下载，请稍候...', 'success');
 };
 
 // ================================================================
@@ -1205,6 +1343,8 @@ MC.renderDetail = async function(id) {
 
         ${MC._renderMods(a.modsJson)}
 
+        ${MC._renderResourcePacks(a.resourcePacksJson)}
+
         <div class="detail-author-row">
           <div class="detail-author-avatar">${MC.UI.esc((a.authorName || '?')[0])}</div>
           <div>
@@ -1227,6 +1367,10 @@ MC.renderDetail = async function(id) {
           <button class="btn btn-primary btn-lg" onclick="MC.handleDownload(${a.id})">
             <svg width="16" height="16"><use href="#icon-download"/></svg>
             下载存档 (${a.downloadCount || 0})
+          </button>
+          <button class="btn btn-accent btn-lg" onclick="MC.handleDownloadAll(${a.id})" style="margin-left:8px">
+            <svg width="16" height="16"><use href="#icon-download"/></svg>
+            一键打包下载
           </button>
         </div>
 
@@ -1261,6 +1405,30 @@ MC._renderMods = function(modsJson) {
     return '<span style="display:inline-flex;align-items:center;gap:2px">' + parts.join('') + '</span>';
   }).join('');
   return '<div class="mods-section"><span class="mods-label">📦 所需 Mod</span>' + items + '</div>';
+};
+
+// ===== 资源包列表渲染 =====
+MC._renderResourcePacks = function(rpJson) {
+  if (!rpJson) return '';
+  var rps = [];
+  try { rps = JSON.parse(rpJson); } catch(e) { return ''; }
+  if (!rps.length) return '';
+  var items = rps.map(function(rp) {
+    var name = MC.UI.esc(rp.name || '');
+    var parts = [];
+    if (rp.url) {
+      parts.push('<a href="' + MC.UI.esc(rp.url) + '" target="_blank" rel="noopener" class="mod-link-item">' + name + '</a>');
+    } else {
+      parts.push('<span class="mod-link-item">' + name + '</span>');
+    }
+    // 如果上传了资源包文件，显示下载链接
+    if (rp.filePath) {
+      var dl = '/api/archives/0/rp-download?path=' + encodeURIComponent(rp.filePath);
+      parts.push('<a href="' + dl + '" class="mod-link-item mod-dl-item" title="下载 ' + MC.UI.esc(rp.name) + '">⬇</a>');
+    }
+    return '<span style="display:inline-flex;align-items:center;gap:2px">' + parts.join('') + '</span>';
+  }).join('');
+  return '<div class="mods-section"><span class="mods-label">🎨 所需资源包</span>' + items + '</div>';
 };
 
 // ================================================================

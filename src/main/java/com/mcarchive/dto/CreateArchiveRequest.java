@@ -44,6 +44,12 @@ public class CreateArchiveRequest {
     /** Mod 文件列表（与 modsJson 中的条目顺序对应，无文件的 slot 传 null） */
     private List<MultipartFile> modFiles;
 
+    /** 所需资源包列表，JSON 字符串 */
+    private String resourcePacksJson;
+
+    /** 资源包文件列表（与 resourcePacksJson 中的条目顺序对应，无文件的 slot 传 null） */
+    private List<MultipartFile> resourcePackFiles;
+
     // ===== Getter / Setter =====
     public String getTitle()       { return title; }
     public void setTitle(String t) { this.title = t; }
@@ -65,4 +71,8 @@ public class CreateArchiveRequest {
     public void setImages(List<MultipartFile> imgs) { this.images = imgs; }
     public List<MultipartFile> getModFiles() { return modFiles; }
     public void setModFiles(List<MultipartFile> mf) { this.modFiles = mf; }
+    public String getResourcePacksJson() { return resourcePacksJson; }
+    public void setResourcePacksJson(String r) { this.resourcePacksJson = r; }
+    public List<MultipartFile> getResourcePackFiles() { return resourcePackFiles; }
+    public void setResourcePackFiles(List<MultipartFile> rf) { this.resourcePackFiles = rf; }
 }

@@ -38,6 +38,10 @@ public class Archive {
     @Column(columnDefinition = "TEXT")
     private String modsJson;
 
+    /** 所需资源包列表，JSON 数组：[{"name":"Faithful","url":"https://..."}, ...] */
+    @Column(columnDefinition = "TEXT")
+    private String resourcePacksJson;
+
     /** 外部下载链接（可选，如网盘链接） */
     @Column(length = 500)
     private String downloadUrl;
@@ -106,6 +110,9 @@ public class Archive {
 
     public String getModsJson() { return modsJson; }
     public void setModsJson(String modsJson) { this.modsJson = modsJson; }
+
+    public String getResourcePacksJson() { return resourcePacksJson; }
+    public void setResourcePacksJson(String resourcePacksJson) { this.resourcePacksJson = resourcePacksJson; }
 
     public String getDownloadUrl() { return downloadUrl; }
     public void setDownloadUrl(String downloadUrl) { this.downloadUrl = downloadUrl; }

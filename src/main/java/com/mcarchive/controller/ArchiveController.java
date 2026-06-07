@@ -19,11 +19,19 @@ import org.springframework.web.bind.annotation.*;
 
 import org.springframework.data.domain.Page;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import java.io.*;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * 存档控制器 — 重构版
@@ -230,6 +238,113 @@ public class ArchiveController {
             .body(resource);
     }
 
+    /** 下载资源包文件 */
+    @GetMapping("/{id}/rp-download")
+    public ResponseEntity<?> downloadResourcePackFile(@PathVariable Long id,
+                                              @RequestParam String path) {
+        Resource resource = new FileSystemResource(uploadRoot.resolve(path));
+        if (!resource.exists()) return ResponseEntity.notFound().build();
+        String filename = path.substring(path.lastIndexOf('/') + 1);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(resource);
+    }
+
+    /** 一键打包下载：存档文件 + Mod 文件 + 资源包文件 */
+    @GetMapping("/{id}/download-all")
+    public void downloadAll(@PathVariable Long id, HttpServletResponse response) throws IOException {
+        Archive archive = archiveService.getArchiveById(id);
+        if (archive == null) {
+            response.sendError(404, "存档不存在");
+            return;
+        }
+
+        archiveService.incrementDownloadCount(id);
+        CustomUserDetails details = currentUser.getDetails();
+        if (details != null) {
+            archiveService.recordDownload(details.getUser().getId(), id);
+        }
+
+        // 收集所有要打包的文件路径
+        Map<String, Path> filesToPack = new LinkedHashMap<>();
+        Set<String> usedNames = new HashSet<>();
+
+        // 存档文件
+        if (archive.getFilePath() != null && !archive.getFilePath().isEmpty()) {
+            Path p = uploadRoot.resolve(archive.getFilePath());
+            if (Files.exists(p)) {
+                String name = "存档 - " + sanitizeZipName(archive.getTitle()) +
+                    archive.getFilePath().substring(archive.getFilePath().lastIndexOf('.'));
+                filesToPack.put(name, p);
+                usedNames.add(name);
+            }
+        }
+
+        // Mod 文件
+        collectJsonFiles(archive.getModsJson(), "mod_", filesToPack, usedNames);
+
+        // 资源包文件
+        collectJsonFiles(archive.getResourcePacksJson(), "rp_", filesToPack, usedNames);
+
+        if (filesToPack.isEmpty()) {
+            response.sendError(404, "没有可下载的文件");
+            return;
+        }
+
+        String zipName = sanitizeZipName(archive.getTitle()) + "_合集.zip";
+        String encodedName = URLEncoder.encode(zipName, StandardCharsets.UTF_8).replace("+", "%20");
+        response.setContentType("application/zip");
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"archive_bundle.zip\"; filename*=UTF-8''" + encodedName);
+        response.setHeader("X-Content-Type-Options", "nosniff");
+
+        try (ZipOutputStream zos = new ZipOutputStream(response.getOutputStream())) {
+            for (Map.Entry<String, Path> entry : filesToPack.entrySet()) {
+                zos.putNextEntry(new ZipEntry(entry.getKey()));
+                Files.copy(entry.getValue(), zos);
+                zos.closeEntry();
+            }
+        }
+    }
+
+    /** 收集 JSON 列表中含 filePath 的文件 */
+    private void collectJsonFiles(String json, String prefix,
+                                   Map<String, Path> filesToPack, Set<String> usedNames) {
+        if (json == null || json.isEmpty()) return;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            var root = mapper.readTree(json);
+            if (!root.isArray()) return;
+            for (int i = 0; i < root.size(); i++) {
+                var node = root.get(i);
+                if (node.has("filePath") && !node.get("filePath").asText().isEmpty()) {
+                    String relPath = node.get("filePath").asText();
+                    Path p = uploadRoot.resolve(relPath);
+                    if (Files.exists(p)) {
+                        String originalName = p.getFileName().toString();
+                        String zipName = originalName;
+                        if (usedNames.contains(zipName)) {
+                            zipName = prefix + i + "_" + originalName;
+                        }
+                        if (usedNames.contains(zipName)) {
+                            zipName = prefix + i + "_" + System.currentTimeMillis() + "_" + originalName;
+                        }
+                        filesToPack.put(zipName, p);
+                        usedNames.add(zipName);
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // JSON 解析失败，跳过
+        }
+    }
+
+    private String sanitizeZipName(String name) {
+        if (name == null) return "archive";
+        return name.replaceAll("[\\\\/:*?\"<>|]", "_").replaceAll("\\s+", "_");
+    }
+
     /** 查看某作者的存档（分页） */
     @GetMapping("/author/{authorId}")
     public ResponseEntity<?> getArchivesByAuthor(
@@ -393,6 +508,7 @@ public class ArchiveController {
         map.put("mcVersion", a.getMcVersion());
         map.put("modLoader", a.getModLoader());
         map.put("modsJson", a.getModsJson());
+        map.put("resourcePacksJson", a.getResourcePacksJson());
         map.put("downloadUrl", a.getDownloadUrl());
         map.put("description", a.getDescription());
         map.put("likeCount", a.getLikeCount());

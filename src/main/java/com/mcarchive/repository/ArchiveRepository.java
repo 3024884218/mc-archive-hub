@@ -35,7 +35,9 @@ public interface ArchiveRepository extends JpaRepository<Archive, Long> {
          + "LOWER(a.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
          + "LOWER(a.mcVersion) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
          + "LOWER(a.modLoader) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
-         + "LOWER(a.category) LIKE LOWER(CONCAT('%', :keyword, '%')) "
+         + "LOWER(a.category) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+         + "LOWER(a.modsJson) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+         + "LOWER(a.resourcePacksJson) LIKE LOWER(CONCAT('%', :keyword, '%')) "
          + "ORDER BY a.createdAt DESC")
     List<Archive> search(@Param("keyword") String keyword);
 
@@ -111,7 +113,9 @@ public interface ArchiveRepository extends JpaRepository<Archive, Long> {
          + "LOWER(a.description) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
          + "LOWER(a.mcVersion) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
          + "LOWER(a.modLoader) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
-         + "LOWER(a.category) LIKE LOWER(CONCAT('%', :keyword, '%')) "
+         + "LOWER(a.category) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+         + "LOWER(a.modsJson) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
+         + "LOWER(a.resourcePacksJson) LIKE LOWER(CONCAT('%', :keyword, '%')) "
          + "ORDER BY a.createdAt DESC")
     Page<Archive> searchPaged(@Param("keyword") String keyword, Pageable pageable);
 

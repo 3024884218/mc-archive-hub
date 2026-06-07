@@ -65,6 +65,15 @@ MC.UI = {
     return '<span class="card-meta-tag" style="background:var(--c-accent-bg);color:var(--c-accent)">📦 ' + mods.length + ' Mod</span>';
   },
 
+  /** 资源包数量角标 */
+  _rpBadge(rpJson) {
+    if (!rpJson) return '';
+    var rps = [];
+    try { rps = JSON.parse(rpJson); } catch(e) { return ''; }
+    if (!rps.length) return '';
+    return '<span class="card-meta-tag" style="background:oklch(0.22 0.04 280);color:oklch(0.7 0.14 280)">🎨 ' + rps.length + ' 资源包</span>';
+  },
+
   // ===== 存档卡片 =====
   archiveCard(a, index) {
     const cover = a.images?.[0]?.url;
@@ -87,6 +96,7 @@ MC.UI = {
           <span class="card-meta-tag">MC ${this.esc(a.mcVersion || '?')}</span>
           <span class="card-meta-tag">${this.loaderIcon(a.modLoader)} ${this.esc(this.loaderLabel(a.modLoader))}</span>
           ${MC.UI._modBadge(a.modsJson)}
+          ${MC.UI._rpBadge(a.resourcePacksJson)}
         </div>
         <h3 class="card-title">${this.esc(a.title)}</h3>
         <p class="card-desc">${this.esc((a.description || '').substring(0, 120))}</p>

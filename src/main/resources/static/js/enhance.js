@@ -183,12 +183,26 @@ MC.openEditArchiveModal = function(id) {
       '</div>' +
       '<button class="btn btn-ghost btn-sm" style="margin-top:6px" id="add-mod-btn">+ 添加 Mod</button>' +
     '</div>' +
+    '<div class="form-group"><label class="form-label">所需资源包 <span style="font-weight:normal;color:var(--c-text-tertiary)">（可选）</span></label>' +
+      '<div id="rp-container">' +
+        '<div class="mod-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">' +
+          '<input class="form-input" type="text" placeholder="资源包名称" style="flex:2">' +
+          '<input class="form-input" type="url" placeholder="下载链接（可选）" style="flex:2">' +
+          '<input type="file" accept=".zip,.rar,.7z" style="display:none" class="rp-file-input">' +
+          '<button class="btn btn-ghost btn-sm rp-file-btn" style="flex-shrink:0;font-size:18px" title="上传资源包文件 (zip/rar/7z)">🎨</button>' +
+          '<button class="btn btn-ghost btn-sm rp-del-btn" disabled style="flex-shrink:0">✕</button>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn btn-ghost btn-sm" style="margin-top:6px" id="add-rp-btn">+ 添加资源包</button>' +
+    '</div>' +
     '<div class="form-error" id="up-error"><span class="form-error-icon">⚠️</span><span id="up-error-msg"></span></div>' +
     '<button class="btn btn-primary" style="width:100%;justify-content:center" id="up-submit">保存修改</button>' +
     '</div>';
   MC.Modal.open('upload-modal');
   // 初始化 Mod 构建器（填入已有数据）
   MC.initModBuilder(a.modsJson);
+  // 初始化资源包构建器（填入已有数据）
+  MC.initResourcePackBuilder(a.resourcePacksJson);
   document.getElementById('up-submit').onclick = function() {
     MC.handleEditArchive(id);
   };
@@ -211,6 +225,13 @@ MC.handleEditArchive = async function(id) {
   else fd.append('modsJson', '');
   modData.modFiles.forEach(function(f) {
     if (f) fd.append('modFiles', f);
+  });
+  // 收集资源包
+  var rpData = MC.gatherResourcePackFiles();
+  if (rpData.rpJson !== '[]') fd.append('resourcePacksJson', rpData.rpJson);
+  else fd.append('resourcePacksJson', '');
+  rpData.rpFiles.forEach(function(f) {
+    if (f) fd.append('resourcePackFiles', f);
   });
   var downloadUrl = (document.getElementById('up-download-url') || {}).value || '';
   if (downloadUrl.trim()) fd.append('downloadUrl', downloadUrl.trim());

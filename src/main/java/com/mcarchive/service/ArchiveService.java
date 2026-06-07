@@ -65,6 +65,7 @@ public class ArchiveService {
         archive.setMcVersion(req.getMcVersion());
         archive.setModLoader(req.getModLoader());
         archive.setModsJson(req.getModsJson());
+        archive.setResourcePacksJson(req.getResourcePacksJson());
         archive.setDownloadUrl(req.getDownloadUrl());
         archive.setDescription(req.getDescription());
         archive.setCreatedAt(LocalDateTime.now());
@@ -105,6 +106,14 @@ public class ArchiveService {
             if (modFiles != null && !modFiles.isEmpty() && modsJson != null) {
                 modsJson = injectModFilePaths(modsJson, modFiles, archive.getId());
                 archive.setModsJson(modsJson);
+            }
+
+            // 处理资源包文件
+            List<MultipartFile> rpFiles = req.getResourcePackFiles();
+            String rpJson = archive.getResourcePacksJson();
+            if (rpFiles != null && !rpFiles.isEmpty() && rpJson != null) {
+                rpJson = injectResourcePackFilePaths(rpJson, rpFiles, archive.getId());
+                archive.setResourcePacksJson(rpJson);
             }
         } catch (Exception e) {
             throw new RuntimeException("文件存储失败: " + e.getMessage(), e);
@@ -341,6 +350,7 @@ public class ArchiveService {
         archive.setMcVersion(req.getMcVersion());
         archive.setModLoader(req.getModLoader());
         archive.setModsJson(req.getModsJson());
+        archive.setResourcePacksJson(req.getResourcePacksJson());
         archive.setDownloadUrl(req.getDownloadUrl());
         archive.setDescription(req.getDescription());
 
@@ -373,6 +383,14 @@ public class ArchiveService {
         if (modFiles != null && !modFiles.isEmpty() && modsJson != null) {
             modsJson = injectModFilePaths(modsJson, modFiles, archiveId);
             archive.setModsJson(modsJson);
+        }
+
+        // 处理资源包文件
+        List<MultipartFile> rpFiles = req.getResourcePackFiles();
+        String rpJson = archive.getResourcePacksJson();
+        if (rpFiles != null && !rpFiles.isEmpty() && rpJson != null) {
+            rpJson = injectResourcePackFilePaths(rpJson, rpFiles, archiveId);
+            archive.setResourcePacksJson(rpJson);
         }
 
         return archiveRepository.save(archive);
@@ -543,6 +561,34 @@ public class ArchiveService {
             return mapper.writeValueAsString(root);
         } catch (Exception e) {
             return modsJson;
+        }
+    }
+
+    /**
+     * 将上传的资源包文件路径注入 resourcePacksJson 数组。
+     * resourcePacksJson 格式: [{"name":"...","url":"..."}, ...]
+     * resourcePackFiles 列表顺序与数组索引对应
+     */
+    private String injectResourcePackFilePaths(String rpJson, List<MultipartFile> rpFiles, Long archiveId) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(rpJson);
+            if (!root.isArray()) return rpJson;
+
+            for (int i = 0; i < root.size() && i < rpFiles.size(); i++) {
+                MultipartFile rpFile = rpFiles.get(i);
+                if (rpFile != null && !rpFile.isEmpty()) {
+                    try {
+                        String path = fileStorageService.storeResourcePackFile(archiveId, rpFile, i);
+                        ((com.fasterxml.jackson.databind.node.ObjectNode) root.get(i)).put("filePath", path);
+                    } catch (IOException e) {
+                        // 单个资源包文件存储失败不阻断整体
+                    }
+                }
+            }
+            return mapper.writeValueAsString(root);
+        } catch (Exception e) {
+            return rpJson;
         }
     }
 }
