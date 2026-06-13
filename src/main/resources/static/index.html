@@ -92,7 +92,7 @@
 <!-- ===== Header ===== -->
 <header class="header">
   <div class="header-inner">
-    <a class="logo" href="#" onclick="MC.navigate('home')" aria-label="MC Archive Hub 首页">
+    <a class="logo" href="#" onclick="MC.navigate('home',true)" aria-label="MC Archive Hub 首页">
       <div class="logo-icon">M</div>
       <span class="logo-text">MC Archive Hub</span>
     </a>
@@ -114,7 +114,7 @@
           onclick="MC.clearSearch()" aria-label="清除搜索">&times;</button>
       </div>
 
-      <button class="nav-link active" data-nav="home" onclick="MC.navigate('home')">发现</button>
+      <button class="nav-link active" data-nav="home" onclick="MC.navigate('home',true)">发现</button>
       <button class="nav-link" data-nav="authors" onclick="MC.openAuthorSearch()">👥 作者</button>
       <button class="nav-link" data-nav="profile" id="nav-profile"
         onclick="MC.navigate('profile')" style="display:none">我的</button>
@@ -162,11 +162,12 @@
       &copy; 2024 MC Archive Hub · Minecraft 存档分享社区
     </div>
     <div class="footer-links">
+      <a class="footer-link" href="/fireworks.html" target="_blank">🎆 烟花</a>
       <a class="footer-link" href="#" onclick="MC.openSponsorModal()">⚡ 支持网站</a>
       <a class="footer-link" href="mailto:douking8@outlook.com">
         <svg width="14" height="14"><use href="#icon-mail"/></svg> 联系网站: douking8@outlook.com
       </a>
-      <a class="footer-link" href="#" onclick="MC.navigate('home')">发现存档</a>
+      <a class="footer-link" href="#" onclick="MC.navigate('home',true)">发现存档</a>
       <a class="footer-link" href="#" onclick="MC.openUploadModal()">上传存档</a>
     </div>
   </div>

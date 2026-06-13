@@ -36,8 +36,10 @@ public class SecurityConfig {
 
             // 权限配置
             .authorizeHttpRequests(auth -> auth
-                // 公开访问：静态资源 + 认证接口 + 存档浏览
+                // 公开访问：静态资源 + 认证接口 + 存档浏览 + SPA 路由
                 .requestMatchers("/", "/index.html", "/css/**", "/js/**", "/images/**", "/uploads/**",
+                                 "/fireworks.html", "/bgm.mp3",
+                                 "/archive/**", "/author/**", "/profile",
                                  "/api/auth/register", "/api/auth/login",
                                  "/api/auth/verify-email", "/api/auth/verify-device",
                                  "/api/auth/forgot-password", "/api/auth/reset-password").permitAll()

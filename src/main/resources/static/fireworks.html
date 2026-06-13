@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>烟花</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #02040a;
+    overflow: hidden;
+    cursor: crosshair;
+    user-select: none;
+    -webkit-user-select: none;
+    height: 100vh; width: 100vw;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas { display:block; }
+
+  #hint {
+    position: fixed; z-index:10; pointer-events:none;
+    transition: opacity 0.6s;
+  }
+  #hint.hide { opacity:0; }
+  #hint span {
+    font: 1.4rem "SimSun", serif;
+    color: rgba(255,255,255,0.45);
+    letter-spacing: 0.25em;
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:0.3; }
+    50% { opacity:1; }
+  }
+
+  /* 收款码从天而降 */
+  #qrcode {
+    position: fixed; z-index:5; pointer-events:none;
+    opacity: 0;
+    transform: translateY(-200px) scale(0.3);
+    transition: all 3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  #qrcode.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  #qrcode img {
+    width: clamp(140px, 20vw, 220px);
+    border-radius: 12px;
+    box-shadow: 0 0 60px rgba(255, 255, 255, 0.15), 0 0 120px rgba(255, 200, 60, 0.1);
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint"><span>点 击 夜 空</span></div>
+<div id="qrcode"><img src="images/wx.jpg" alt="微信收款码"></div>
+<audio id="bgm" src="bgm.mp3" preload="auto"></audio>
+
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+let W, H;
+
+function resize() {
+  W = c.width = innerWidth;
+  H = c.height = innerHeight;
+}
+resize();
+addEventListener('resize', resize);
+
+// ===== 背景星空 =====
+const stars = [];
+for (let i = 0; i < 250; i++) {
+  stars.push({
+    x: Math.random() * innerWidth,
+    y: Math.random() * innerHeight * 0.9,
+    r: Math.random() * 1 + 0.3,
+    phase: Math.random() * Math.PI * 2,
+    speed: Math.random() * 0.01 + 0.003,
+  });
+}
+
+// ===== 真实烟花配色（金属盐焰色）=====
+const colors = [
+  { name: 'gold',   hex: '#ffcc00', trail: '#ff9900' },
+  { name: 'silver', hex: '#e8e8e8', trail: '#cccccc' },
+  { name: 'red',    hex: '#ff3333', trail: '#ff6666' },
+  { name: 'green',  hex: '#33ff33', trail: '#66ff66' },
+  { name: 'blue',   hex: '#3399ff', trail: '#66bbff' },
+  { name: 'purple', hex: '#cc33ff', trail: '#dd66ff' },
+  { name: 'orange', hex: '#ff6600', trail: '#ff9933' },
+  { name: 'pink',   hex: '#ff66aa', trail: '#ff99cc' },
+];
+
+// ===== 粒子 — 模拟真实火药星点 =====
+class Particle {
+  constructor(x, y, vx, vy, color, life) {
+    this.x = x; this.y = y;
+    this.vx = vx; this.vy = vy;
+    this.color = color;
+    this.life = life;
+    this.maxLife = life;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.025;   // 重力
+    this.vx *= 0.998;   // 空气阻力
+    this.vy *= 0.998;
+    this.life -= 0.01;
+  }
+  draw() {
+    if (this.life <= 0) return;
+    const t = this.life / this.maxLife;
+    const a = Math.pow(t, 0.6);    // 亮度曲线
+
+    // 发光星点
+    ctx.save();
+    ctx.globalAlpha = a * 0.4;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 核心亮点
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ===== 上升尾焰火星 =====
+class Spark {
+  constructor(x, y, vx, vy, color, life) {
+    this.x = x; this.y = y;
+    this.vx = vx; this.vy = vy;
+    this.color = color;
+    this.life = life; this.max = life;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.015;
+    this.life -= 0.025;
+  }
+  draw() {
+    if (this.life <= 0) return;
+    const t = this.life / this.max;
+    ctx.globalAlpha = t;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+const particles = [], sparks = [];
+
+// ===== 爆炸 — 爱心形状 =====
+function explode(x, y, grand = false) {
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  const n = grand ? 400 : 220;
+  const s = grand ? 7 : 4;
+
+  // 瞬间白闪光晕
+  ctx.save();
+  ctx.globalAlpha = grand ? 0.9 : 0.6;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(x, y, grand ? 20 : 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // 爱心参数方程扩散
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * Math.PI * 2;
+    const hx = 16 * Math.pow(Math.sin(t), 3);
+    const hy = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+    const jitter = 1 + Math.random() * 0.6;
+    const vx = (hx / 20) * s * jitter;
+    const vy = (hy / 20) * s * jitter;
+    particles.push(new Particle(x, y,
+      vx, vy,
+      color.hex, 1.8 + Math.random() * (grand ? 2.5 : 1.5)
+    ));
+  }
+
+  // 中心余烬
+  for (let i = 0; i < (grand ? 60 : 30); i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = Math.random() * (grand ? 2.5 : 1.2);
+    particles.push(new Particle(x, y,
+      Math.cos(a) * sp, Math.sin(a) * sp,
+      '#fff', 0.3 + Math.random() * (grand ? 0.8 : 0.4)
+    ));
+  }
+}
+
+// ===== 火箭 =====
+class Rocket {
+  constructor() {
+    this.x = Math.random() * W * 0.7 + W * 0.15;
+    this.y = H + 5;
+    this.vy = -(Math.random() * 3 + 5);  // 较快上升
+    this.vx = (Math.random() - 0.5) * 0.3;
+    this.target = Math.random() * H * 0.2 + H * 0.05;
+    this.alive = true;
+    this.sparkTimer = 0;
+    this.trail = [];
+  }
+  update() {
+    this.trail.push({ x: this.x, y: this.y, life: 0.15 });
+    for (let t of this.trail) t.life -= 0.02;
+    this.trail = this.trail.filter(t => t.life > 0);
+
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.01;
+
+    this.sparkTimer++;
+    if (this.sparkTimer % 4 === 0) {
+      sparks.push(new Spark(
+        this.x + (Math.random() - 0.5) * 2, this.y,
+        (Math.random() - 0.5) * 0.5, Math.random() * 1.5,
+        '#ffcc66', 0.3 + Math.random() * 0.3
+      ));
+    }
+
+    if (this.y <= this.target) {
+      this.alive = false;
+      explode(this.x, this.y);
+    }
+  }
+  draw() {
+    // 上升轨迹
+    if (this.trail.length > 1) {
+      ctx.save();
+      for (let i = 1; i < this.trail.length; i++) {
+        const t = this.trail[i];
+        const a = t.life / 0.15 * 0.5;
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#ffcc66';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(this.trail[i - 1].x, this.trail[i - 1].y);
+        ctx.lineTo(t.x, t.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 火箭头
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+const rockets = [];
+let running = false;
+
+function launch() {
+  rockets.push(new Rocket());
+}
+function schedule() {
+  if (!running) return;
+  setTimeout(() => { launch(); schedule(); }, 500 + Math.random() * 700);
+}
+
+// ===== 渲染 =====
+function draw() {
+  ctx.fillStyle = 'rgba(2, 3, 8, 0.07)';
+  ctx.fillRect(0, 0, W, H);
+
+  // 星空
+  for (let s of stars) {
+    if (s.x > W) s.x = 0;
+    if (s.y > H) s.y = 0;
+    s.phase += s.speed;
+    const a = 0.2 + Math.sin(s.phase) * 0.2;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 火箭
+  for (const r of rockets) { r.update(); r.draw(); }
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    if (!rockets[i].alive) rockets.splice(i, 1);
+  }
+
+  // 尾焰
+  for (const s of sparks) { s.update(); s.draw(); }
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    if (sparks[i].life <= 0) sparks.splice(i, 1);
+  }
+
+  // 粒子
+  for (const p of particles) { p.update(); p.draw(); }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    if (particles[i].life <= 0) particles.splice(i, 1);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// ===== 交互 =====
+c.addEventListener('click', () => {
+  document.getElementById('hint').classList.add('hide');
+  document.getElementById('bgm').play().catch(() => {});
+  if (!running) {
+    running = true;
+    schedule();
+    // 4.5 秒后触发中心大烟花，收款码从中绽放
+    setTimeout(() => {
+      explode(W * 0.5, H * 0.3, true);
+      setTimeout(() => {
+        document.getElementById('qrcode').classList.add('show');
+      }, 200);
+    }, 4500);
+  }
+});
+c.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  document.getElementById('hint').classList.add('hide');
+  document.getElementById('bgm').play().catch(() => {});
+  if (!running) {
+    running = true;
+    schedule();
+    setTimeout(() => {
+      explode(W * 0.5, H * 0.3, true);
+      setTimeout(() => {
+        document.getElementById('qrcode').classList.add('show');
+      }, 200);
+    }, 4500);
+  }
+}, { passive: false });
+
+addEventListener('resize', () => {
+  stars.forEach(s => {
+    s.x = Math.random() * W;
+    s.y = Math.random() * H * 0.9;
+  });
+});
+
+draw();
+</script>
+</body>
+</html>
