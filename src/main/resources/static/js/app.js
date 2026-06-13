@@ -419,7 +419,7 @@ MC.handleLogout = async function() {
   try { await MC.API.logout(); } catch {}
   MC.State.currentUser = null;
   MC.UI.updateHeader();
-  MC.navigate('home');
+  MC.navigate('home', true);
   MC.Toast.show('已退出登录', 'info');
 };
 
@@ -895,7 +895,7 @@ MC.handleUpload = async function() {
     MC._clearDraft();
     MC.Modal.close('upload-modal');
     MC.Toast.show('存档发布成功！🎉', 'success');
-    MC.navigate('home');
+    MC.navigate('home', true);
   } catch (e) {
     setErr(e.message);
   } finally {
@@ -964,7 +964,7 @@ MC.handleDislike = async function(id, evt) {
     const r = await MC.API.toggleDislike(id);
     if (r.deleted) {
       MC.Toast.show(r.message, 'info');
-      MC.navigate('home');
+      MC.navigate('home', true);
       return;
     }
     const btn = document.getElementById('detail-dislike-btn');
@@ -1019,6 +1019,15 @@ MC.handleDownloadAll = function(id) {
   MC.Toast.show('正在打包下载，请稍候...', 'success');
 };
 
+/** 更新页面标题（浏览器标签页） */
+MC._updateTitle = function(title) {
+  if (title) {
+    document.title = title + ' - MC Archive Hub';
+  } else {
+    document.title = 'MC Archive Hub - Minecraft 存档分享';
+  }
+};
+
 // ================================================================
 // 路由
 // ================================================================
@@ -1028,14 +1037,15 @@ MC.navigate = function(page, data) {
   MC.State.archiveDetail = null;
 
   // 清空搜索
-  const inp = document.getElementById('search-input');
+  var inp = document.getElementById('search-input');
   if (inp) inp.value = '';
-  const clearBtn = document.getElementById('search-clear');
+  var clearBtn = document.getElementById('search-clear');
   if (clearBtn) clearBtn.classList.add('hidden');
 
   // 导航高亮
-  document.querySelectorAll('.nav-link').forEach(el =>
-    el.classList.toggle('active', el.dataset.nav === page));
+  document.querySelectorAll('.nav-link').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.nav === page);
+  });
 
   // 更新浏览器 URL
   var url = '/';
@@ -1043,8 +1053,17 @@ MC.navigate = function(page, data) {
     url = '/archive/' + data;
   } else if (page === 'profile') {
     url = '/profile';
+  } else if (page === 'home') {
+    // 首页：data===true 时重置筛选（logo/发现按钮）；其他情况保留筛选状态
+    if (data === true) {
+      MC.State.activeCategory = 'all';
+      MC.State.activeMcVersion = 'all';
+      MC.State.activeModLoader = 'all';
+      MC.State.pageNum = 0;
+    }
+    url = '/';
   }
-  if (window.location.pathname !== url) {
+  if (window.location.pathname + window.location.search !== url) {
     history.pushState({ page: page, data: data }, '', url);
   }
 
@@ -1068,33 +1087,67 @@ MC._parseRoute = function() {
     MC.State.pageNum = 0;
     return { page: 'author', data: { id: id } };
   }
+  // 首页：从 query 参数恢复筛选/排序/分页状态
+  var params = new URLSearchParams(window.location.search);
+  MC.State.activeCategory = params.get('category') || 'all';
+  MC.State.activeMcVersion = params.get('mcVersion') || 'all';
+  MC.State.activeModLoader = params.get('modLoader') || 'all';
+  MC.State.sortMode = params.get('sort') || MC.State.sortMode || 'popular';
+  MC.State.pageNum = parseInt(params.get('page') || '0') || 0;
   return { page: 'home', data: null };
+};
+
+/** 将当前筛选/分页状态同步到 URL（用 replaceState 不产生历史记录） */
+MC._syncUrl = function() {
+  if (MC.State.currentPage !== 'home' || MC.State.searchQuery) return;
+  var params = new URLSearchParams();
+  if (MC.State.activeCategory && MC.State.activeCategory !== 'all')
+    params.set('category', MC.State.activeCategory);
+  if (MC.State.activeMcVersion && MC.State.activeMcVersion !== 'all')
+    params.set('mcVersion', MC.State.activeMcVersion);
+  if (MC.State.activeModLoader && MC.State.activeModLoader !== 'all')
+    params.set('modLoader', MC.State.activeModLoader);
+  if (MC.State.sortMode && MC.State.sortMode !== 'popular')
+    params.set('sort', MC.State.sortMode);
+  if (MC.State.pageNum > 0)
+    params.set('page', String(MC.State.pageNum));
+  var qs = params.toString();
+  var url = qs ? '/?' + qs : '/';
+  if (window.location.pathname + window.location.search !== url) {
+    history.replaceState({ page: 'home', data: null }, '', url);
+  }
+};
+
+/** 清空搜索输入框状态 */
+MC._clearSearchState = function() {
+  var inp = document.getElementById('search-input');
+  if (inp) inp.value = '';
+  var clearBtn = document.getElementById('search-clear');
+  if (clearBtn) clearBtn.classList.add('hidden');
+  MC.State.searchQuery = '';
+  MC.State.archiveDetail = null;
+};
+
+/** 根据解析出的路由执行页面渲染 */
+MC._applyRoute = function(route) {
+  MC.State.currentPage = route.page;
+  MC._clearSearchState();
+  document.querySelectorAll('.nav-link').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.nav === route.page);
+  });
+  MC.renderPage(route.data);
 };
 
 // 监听浏览器前进/后退
 window.addEventListener('popstate', function(e) {
   if (e.state && e.state.page) {
-    MC.State.currentPage = e.state.page;
-    MC.State.searchQuery = '';
-    MC.State.archiveDetail = null;
-    var inp = document.getElementById('search-input');
-    if (inp) inp.value = '';
-    var clearBtn = document.getElementById('search-clear');
-    if (clearBtn) clearBtn.classList.add('hidden');
-    document.querySelectorAll('.nav-link').forEach(function(el) {
-      el.classList.toggle('active', el.dataset.nav === e.state.page);
-    });
-    MC.renderPage(e.state.data);
+    MC._applyRoute(e.state);
   } else {
-    // 页面首次加载或手动输入 URL
-    var route = MC._parseRoute();
-    MC.State.currentPage = route.page;
-    document.querySelectorAll('.nav-link').forEach(function(el) {
-      el.classList.toggle('active', el.dataset.nav === route.page);
-    });
-    MC.renderPage(route.data);
+    MC._applyRoute(MC._parseRoute());
   }
 });
+
+// 页面首次加载不在此处 —— 见 MC.init() 末尾的初始化逻辑
 
 // 导航到作者存档列表
 MC.navigateAuthor = function(authorId, authorName) {
@@ -1157,6 +1210,9 @@ MC.renderPage = function(data) {
 // ================================================================
 MC.renderHome = async function(fullRender) {
   const main = document.getElementById('main-content');
+
+  // 重置页面标题
+  MC._updateTitle(null);
 
   if (fullRender !== false) {
     // 显示 Hero（仅在非搜索状态）
@@ -1275,6 +1331,9 @@ MC.renderHome = async function(fullRender) {
   // 渲染分页
   MC.renderPagination();
 
+  // 同步 URL（使分页/筛选链接可分享）
+  MC._syncUrl();
+
   // 搜索模式下隐藏 hero
   if (MC.State.searchQuery && fullRender !== false) {
     const hero = document.querySelector('.hero');
@@ -1297,17 +1356,20 @@ MC.renderDetail = async function(id) {
     MC.State.archiveDetail = await MC.API.getArchive(id);
   } catch {
     MC.Toast.show('存档不存在或已被删除', 'error');
-    MC.navigate('home');
+    MC.navigate('home', true);
     return;
   }
 
   const a = MC.State.archiveDetail;
   const cover = a.images?.[0]?.url;
 
+  // 更新页面标题
+  MC._updateTitle(a.title);
+
   main.innerHTML = `<div class="app-container">
     <!-- 返回按钮 -->
     <div class="detail-back">
-      <button class="btn btn-ghost btn-sm" onclick="MC.navigate('home')">
+      <button class="btn btn-ghost btn-sm" onclick="if(document.referrer&&document.referrer.indexOf(location.origin)===0)history.back();else MC.navigate('home')">
         <svg width="14" height="14"><use href="#icon-arrow-left"/></svg>
         返回列表
       </button>
